@@ -6,25 +6,45 @@ import shutil
 import glob
 import tempfile
 import argparse
+import datetime
+import subprocess
+import re
 
 #
 # Utility bits
 # 
 
 def log(m):
-    print '* %s' % m
+    if not args.quiet:
+        print '\x1b[33m* %s\x1b[0m' % m
 
 def error(e):
-    print 'Error: %s' % e
+    print '\x1b[31mError: %s\x1b[0m' % e
     sys.exit(1)
 
 def copytree(a, b):
     log('copy %s -> %s' % (a, b))
     shutil.copytree(a, b)
 
+def copyfile(a, b):
+    log('copy %s -> %s' % (a, b))
+    shutil.copyfile(a, b)
+
 def rmtree(a):
     log('remove %s' % a)
     shutil.rmtree(a, ignore_errors=True)
+
+def command(c, can_fail=False):
+    log(c)
+    r = os.system(c)
+    if (r >> 8) and not can_fail:
+        error('command failed')
+
+def command_and_read(c):
+    log(c)
+    p = subprocess.Popen(c.split(), stdout=subprocess.PIPE)
+    f = os.fdopen(os.dup(p.stdout.fileno()))
+    return f
 
 
 #
@@ -111,12 +131,23 @@ class Environment(object):
             e += '%s="%s" ' % (k, v)
         return e
 
-    def work_dir(self, sub):
+    def work_dir_cdist(self, sub):
+        assert(false)
+
+    def work_dir_cscript(self):
         assert(false)
         
     def checkout(self, project):
-        os.command('git clone %s/%s.git %s/src/%s' % (project.git_dir, project.name, self.work_dir(), project.name))
-        os.chdir(self.work_dir())
+        flags = ''
+        redirect = ''
+        if args.quiet:
+            flags = '-q'
+            redirect = '>/dev/null'
+        command('git clone %s %s/%s.git %s/src/%s' % (flags, project.git_dir, project.name, self.work_dir_cdist(), project.name))
+        os.chdir('%s/src/%s' % (self.work_dir_cdist(), project.name))
+        command('git checkout %s %s %s' % (flags, project.specifier, redirect))
+        command('git submodule init')
+        command('git submodule update')
 
     def build_dependencies(self, target, project):
         if 'dependencies' in project.cscript:
@@ -128,11 +159,19 @@ class Environment(object):
         project.cscript['build'](self, target)
 
     def package(self, target, project):
-        self.build_dependencies(target, project)
+        print 'hello'
+        if target.platform != 'source':
+            self.build_dependencies(target, project)
         self.checkout(project)
-        self.build(target, project)
-        project.cscript['package'](self, target, project.version)
+        if target.platform == 'source':
+            command('./waf dist')
+            return os.path.abspath('%s-%s.tar.bz2' % (project.name, project.version))
+        else:
+            project.cscript['build'](self, target)
+            return project.cscript['package'](self, target, project.version)
 
+    def cleanup(self):
+        pass
 
 #
 # ChrootEnvironment
@@ -147,31 +186,29 @@ class ChrootEnvironment(Environment):
 
         # ChrootEnvironments work in dir_in_chroot, and clear
         # it out before use
-        for g in glob.glob('%s/*' % self.work_dir(False)):
+        for g in glob.glob('%s/*' % self.work_dir_cdist()):
             rmtree(g)
 
         # Environment variables
-        self.set('CXXFLAGS', '-I%s/include' % self.work_dir(True))
-        self.set('LINKFLAGS', '-L%s/lib' % self.work_dir(True))
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir(True))
+        self.set('CXXFLAGS', '-I%s/include' % self.work_dir_cscript())
+        self.set('LINKFLAGS', '-L%s/lib' % self.work_dir_cscript())
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
 
-    def work_dir(self, sub = False):
-        if sub:
-            return self.dir_in_chroot
-        else:
-            return '%s/%s%s' % (self.chroot_dir, self.chroot, self.dir_in_chroot)
+    def work_dir_cdist(self):
+        return '%s/%s%s' % (self.chroot_dir, self.chroot, self.dir_in_chroot)
+
+    def work_dir_cscript(self):
+        return self.dir_in_chroot
 
     def command(self, c):
-        log('schroot -> %s' % c)
-
         # Work out the cwd for the chrooted command
         cwd = os.getcwd()
         prefix = '%s/%s' % (self.chroot_dir, self.chroot)
         assert(cwd.startswith(prefix))
-        cwd = cwd[len(prefix)+1:]
+        cwd = cwd[len(prefix):]
 
-        os.system('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
-
+        log('schroot[%s] -> %s' % (cwd, c))
+        command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
 
 #
 # HostEnvironment
@@ -182,12 +219,15 @@ class HostEnvironment(Environment):
         super(HostEnvironment, self).__init__()
         self.temp = tempfile.mkdtemp()
 
-    def work_dir(self, sub = False):
+    def work_dir_cdist(self):
+        return self.temp
+
+    def work_dir_cscript(self):
         return self.temp
 
     def command(self, c):
         log('host -> %s' % c)
-        os.system('%s %s' % (self.variables_string(), c))
+        command('%s %s' % (self.variables_string(), c))
 
     def cleanup(self):
         rmtree(self.temp)
@@ -202,6 +242,9 @@ class WindowsEnvironment(HostEnvironment):
         super(WindowsEnvironment, self).__init__()
 
         self._windows_prefix = '/home/carl/Environments/windows/%d' % bits
+        if not os.path.exists(self._windows_prefix):
+            error('windows prefix %s does not exist' % self._windows_prefix)
+
         if bits == 32:
             self.mingw_name = 'i686'
         else:
@@ -211,15 +254,15 @@ class WindowsEnvironment(HostEnvironment):
         self.mingw_prefix = '/mingw/%s-w64-mingw32' % self.mingw_name
 
         self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self._windows_prefix)
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir(True))
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
         self.set('PATH', '%s/bin:%s:%s' % (self._windows_prefix, self.mingw_path, os.environ['PATH']))
         self.set('CC', '%s-w64-mingw32-gcc' % self.mingw_name)
         self.set('CXX', '%s-w64-mingw32-g++' % self.mingw_name)
         self.set('LD', '%s-w64-mingw32-ld' % self.mingw_name)
         self.set('RANLIB', '%s-w64-mingw32-ranlib' % self.mingw_name)
         self.set('WINRC', '%s-w64-mingw32-windres' % self.mingw_name)
-        self.set('CXXFLAGS', '-I%s/include -I%s/include -I%s/include' % (self._windows_prefix, self.mingw_prefix, self.work_dir(True)))
-        self.set('LINKFLAGS', '-L%s/lib -L%s/lib -L%s/lib' % (self._windows_prefix, self.mingw_prefix, self.work_dir(True)))
+        self.set('CXXFLAGS', '-I%s/include -I%s/include -I%s/include' % (self._windows_prefix, self.mingw_prefix, self.work_dir_cscript()))
+        self.set('LINKFLAGS', '-L%s/lib -L%s/lib -L%s/lib' % (self._windows_prefix, self.mingw_prefix, self.work_dir_cscript()))
 
     def windows_prefix(self):
         return self._windows_prefix
@@ -244,6 +287,9 @@ class Target:
                 self.host = 'i686-w64-mingw32'
             else:
                 self.hots = 'x86_64-w64-mingw32'
+        elif name == 'source':
+            self.platform = 'source'
+            self.environment = HostEnvironment()
 
 #
 # Project
@@ -255,10 +301,12 @@ class Project(object):
         self.git_dir = '/home/carl/git'
         self.version = None
         self.specifier = specifier
+        if self.specifier is None:
+            self.specifier = 'master'
 
         tmp = tempfile.mkdtemp()
-        os.system('git --git-dir=%s/%s.git show %s:cscript > %s/cscript' % (self.git_dir, self.name, self.specifier, tmp))
-        os.system('git --git-dir=%s/%s.git show %s:wscript > %s/wscript' % (self.git_dir, self.name, self.specifier, tmp))
+        command('git --git-dir=%s/%s.git show %s:cscript > %s/cscript' % (self.git_dir, self.name, self.specifier, tmp))
+        command('git --git-dir=%s/%s.git show %s:wscript > %s/wscript' % (self.git_dir, self.name, self.specifier, tmp), can_fail=True)
 
         self.cscript = {}
         execfile('%s/cscript' % tmp, self.cscript)
@@ -280,6 +328,47 @@ class Project(object):
         rmtree(tmp)
 
 
+def set_version_in_wscript(version):
+    f = open('wscript', 'rw')
+    o = open('wscript.tmp', 'w')
+    while 1:
+        l = f.readline()
+        if l == '':
+            break
+
+        s = l.split()
+        if len(s) == 3 and s[0] == "VERSION":
+            print "Writing %s" % version
+            print >>o,"VERSION = '%s'" % version
+        else:
+            print >>o,l,
+    f.close()
+    o.close()
+
+    os.rename('wscript.tmp', 'wscript')
+
+def append_version_to_changelog(version):
+    try:
+        f = open('ChangeLog', 'r')
+    except:
+        warning('Could not open ChangeLog')
+        return
+
+    c = f.read()
+    f.close()
+
+    f = open('ChangeLog', 'w')
+    now = datetime.datetime.now()
+    f.write('%d-%02d-%02d  Carl Hetherington  <cth@carlh.net>\n\n\t* Version %s released.\n\n' % (now.year, now.month, now.day, version))
+    f.write(c)
+
+def append_version_to_debian_changelog(version):
+    if not os.path.exists('debian'):
+        warning('Could not find debian directory')
+        return
+
+    command('dch -b -v %s-1 "New upstream release."' % version)
+
 #
 # Command-line parser
 #
@@ -295,24 +384,139 @@ parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
 parser.add_argument('-t', '--target', help='target')
 args = parser.parse_args()
 
+args.output = os.path.abspath(args.output)
+
+if args.project is None:
+    error('you must specify -p or --project')
+
+project = Project(args.project, args.checkout)
+
 if args.command == 'build':
-    if args.project is None:
-        error('you must specify -p or --project')
     if args.target is None:
         error('you must specify -t or --target')
 
-    project = Project(args.project)
     target = Target(args.target)
-    target.environment.build_dependencies(target, project)
-    target.environment.build(target, project)
+    env = target.environment
+    env.build_dependencies(target, project)
+    env.build(target, project)
+
+    env.cleanup()
 
 elif args.command == 'package':
-    if args.project is None:
-        error('you must specify -p or --project')
     if args.target is None:
         error('you must specify -t or --target')
         
-    project = Project(args.project)
     target = Target(args.target)
-    package(target.environment, target, project)
+    env = target.environment
+    r = env.package(target, project)
+    copyfile(r, '%s/%s' % (args.output, os.path.basename(r)))
 
+    env.cleanup()
+
+elif args.command == 'release':
+    if args.full is False and args.beta is False:
+        error('you must specify --full or --beta')
+
+    env = HostEnvironment()
+    env.checkout(project)
+
+    version = project.version
+    if args.full:
+        version.to_release()
+    else:
+        version.bump_beta()
+
+    set_version_in_wscript(version)
+    append_version_to_changelog(version)
+    append_version_to_debian_changelog(version)
+
+    command('git commit -a -m "Bump version"')
+    command('git tag -m "v%s" v%s' % (version, version))
+
+    if args.full:
+        version.bump_and_to_pre()
+        set_version_in_wscript(version)
+        command('git commit -a -m "Bump version"')
+
+    command('git push')
+    command('git push --tags')
+
+    env.cleanup()
+
+elif args.command == 'pot':
+    env = HostEnvironment()
+    env.checkout(project)
+
+    pots = project.cscript['make_pot'](env)
+    for p in pots:
+        copyfile(p, '%s/%s' % (args.output, os.path.basename(p)))
+
+    env.cleanup()
+
+elif args.command == 'changelog':
+    env = HostEnvironment()
+    env.checkout(project)
+
+    text = open('ChangeLog', 'r')
+    html = open('%s/changelog.html' % args.output, 'w')
+    versions = 8
+    
+    last = None
+    changes = []
+    
+    while 1:
+        l = text.readline()
+        if l == '':
+            break
+    
+        if len(l) > 0 and l[0] == "\t":
+            s = l.split()
+            if len(s) == 4 and s[1] == "Version" and s[3] == "released.":
+                if not "beta" in s[2]:
+                    if last is not None and len(changes) > 0:
+                        print >>html,"<h2>Changes between version %s and %s</h2>" % (s[2], last)
+                        print >>html,"<ul>"
+                        for c in changes:
+                            print >>html,"<li>%s" % c
+                        print >>html,"</ul>"
+                    last = s[2]
+                    changes = []
+                    versions -= 1
+                    if versions < 0:
+                        break
+            else:
+                c = l.strip()
+                if len(c) > 0:
+                    if c[0] == '*':
+                        changes.append(c[2:])
+                    else:
+                        changes[-1] += " " + c
+
+    env.cleanup()
+
+elif args.command == 'manual':
+    env = HostEnvironment()
+    env.checkout(project)
+
+    dirs = project.cscript['make_manual'](env)
+    for d in dirs:
+        copytree(d, '%s/%s' % (args.output, os.path.basename(d)))
+
+    env.cleanup()
+
+elif args.command == 'latest':
+    env = HostEnvironment()
+    env.checkout(project)
+
+    f = command_and_read('git log --tags --simplify-by-decoration --pretty="%d"')
+    t = f.readline()
+    m = re.compile(".*\((.*)\).*").match(t)
+    latest = None
+    if m:
+        tags = m.group(1).split(', ')
+        for t in tags:
+            if len(t) > 0 and t[0] == 'v':
+                latest = t[1:]
+
+    print latest
+    env.cleanup()
