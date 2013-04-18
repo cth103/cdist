@@ -7,6 +7,65 @@ import glob
 import tempfile
 import argparse
 
+class Version:
+    def __init__(self, s):
+        self.pre = False
+        self.beta = None
+
+        if s.startswith("'"):
+            s = s[1:]
+        if s.endswith("'"):
+            s = s[0:-1]
+        
+        if s.endswith('pre'):
+            s = s[0:-3]
+            self.pre = True
+
+        b = s.find("beta")
+        if b != -1:
+            self.beta = int(s[b+4:])
+            s = s[0:b]
+
+        p = s.split('.')
+        self.major = int(p[0])
+        self.minor = int(p[1])
+
+    def bump(self):
+        self.minor += 1
+        self.pre = False
+        self.beta = None
+
+    def to_pre(self):
+        self.pre = True
+        self.beta = None
+
+    def bump_and_to_pre(self):
+        self.bump()
+        self.pre = True
+        self.beta = None
+
+    def to_release(self):
+        self.pre = False
+        self.beta = None
+
+    def bump_beta(self):
+        if self.pre:
+            self.pre = False
+            self.beta = 1
+        elif self.beta is not None:
+            self.beta += 1
+        elif self.beta is None:
+            self.beta = 1
+
+    def __str__(self):
+        s = '%d.%02d' % (self.major, self.minor)
+        if self.beta is not None:
+            s += 'beta%d' % self.beta
+        elif self.pre:
+            s += 'pre'
+
+        return s
+
 class Environment(object):
     def __init__(self):
         self.environment = {}
@@ -22,45 +81,6 @@ class Environment(object):
         for k, v in self.environment.iteritems():
             e += '%s="%s" ' % (k, v)
         return e
-        
-    def checkout(self, project, co):
-        # XXX: would be git clone
-        self.copytree('/home/carl/src/cdist5/%s' % project, '%s/src/%s' % (self.work_dir(), project))
-
-    def read_cscript(self, project):
-        cscript = {}
-        execfile('%s/src/%s/cscript' % (self.work_dir(), project), cscript)
-        return cscript
-
-    # Install prefix (in sub-filesystem)
-    def prefix(self):
-        return self.work_dir(True)
-
-    def build(self, project, cscript):
-        self.build_dependencies(project, cscript)
-        self.build_self(project, cscript)
-
-    def build_dependencies(self, project, cscript):
-        if 'dependencies' in cscript:
-            for d in cscript['dependencies'](self):
-                self.build(d)
-    
-    def build_self(self, project, cscript):
-        self.chdir('%s/src/%s' % (self.work_dir(True), project))
-        cscript['build'](self)
-
-    def rmtree(self, t):
-        print 'rm -r %s' % t
-        shutil.rmtree(t, ignore_errors=True)
-
-    def copytree(self, a, b):
-        print 'cp -r %s %s' % (a, b)
-        shutil.copytree(a, b)
-
-    def setup(self, project, co):
-        self.checkout(project, co)
-        return self.read_cscript(project)
-
 
 class ChrootEnvironment(Environment):
     def __init__(self, chroot):
@@ -68,14 +88,12 @@ class ChrootEnvironment(Environment):
         self.chroot = chroot
         self.dir_in_chroot = '/home/carl'
         self.chroot_dir = '/home/carl/Environments'
-        # cwd for command()s as a full path in the sub-filesystem
-        self.cwd = self.dir_in_chroot
-        for g in glob.glob('%s/*' % self.work_dir(False)):
-            self.rmtree(g)
+#        for g in glob.glob('%s/*' % self.work_dir(False)):
+#            rmtree(g)
 
-        self.set('CXXFLAGS', '-I%s/include' % self.prefix())
-        self.set('LINKFLAGS', '-L%s/lib' % self.prefix())
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.prefix())
+        self.set('CXXFLAGS', '-I%s/include' % self.work_dir(True))
+        self.set('LINKFLAGS', '-L%s/lib' % self.work_dir(True))
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir(True))
 
     def work_dir(self, sub = False):
         if sub:
@@ -85,22 +103,14 @@ class ChrootEnvironment(Environment):
 
     def command(self, c):
         print 'schroot -> %s' % c
-        os.system('%s schroot -c %s -d %s -p -- %s' % (self.environment_string(), self.chroot, self.cwd, c))
-
-    # chdir in sub-filesystem
-    def chdir(self, d):
-        if len(d) > 0 and d[0] == '/':
-            self.cwd = d
-        else:
-            self.cwd += '/' + d
+        cwd = os.getcwd()
+        prefix = '%s/%s' % (self.chroot_dir, self.chroot)
+        assert(cwd.startswith(prefix))
+        cwd = cwd[len(prefix)+1:]
+        os.system('%s schroot -c %s -d %s -p -- %s' % (self.environment_string(), self.chroot, cwd, c))
 
     def target_type(self):
         return 'linux'
-
-    def package(self, project, cscript):
-        self.build_dependencies(project, cscript)
-        r = cscript['package'](self)
-        return '%s/%s%s' % (self.chroot_dir, self.chroot, r)
 
     def operating_system(self):
         return self.chroot.split('-')[0]
@@ -116,24 +126,17 @@ class HostEnvironment(Environment):
     def __init__(self):
         super(HostEnvironment, self).__init__()
         self.temp = tempfile.mkdtemp()
-        print 'temp is %s' % self.temp
 
     def work_dir(self, sub = False):
         return self.temp
 
     def command(self, c):
         print 'base -> %s' % c
-        print self.environment_string()
         os.system('%s %s' % (self.environment_string(), c))
-
-    def chdir(self, d):
-        os.chdir(d)
 
     def cleanup(self):
         self.rmtree(self.temp)
 
-    def package(self, project, cscript):
-        
 
 class WindowsEnvironment(HostEnvironment):
     def __init__(self, bits):
@@ -151,15 +154,15 @@ class WindowsEnvironment(HostEnvironment):
         self.mingw_prefix = '/mingw/%s-w64-mingw32' % self.mingw_name
 
         self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self._windows_prefix)
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.prefix())
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir(True))
         self.set('PATH', '%s/bin:%s:%s' % (self._windows_prefix, self.mingw_path, self.get('PATH')))
         self.set('CC', '%s-w64-mingw32-gcc' % self.mingw_name)
         self.set('CXX', '%s-w64-mingw32-g++' % self.mingw_name)
         self.set('LD', '%s-w64-mingw32-ld' % self.mingw_name)
         self.set('RANLIB', '%s-w64-mingw32-ranlib' % self.mingw_name)
         self.set('WINRC', '%s-w64-mingw32-windres' % self.mingw_name)
-        self.set('CXXFLAGS', '-I%s/include -I%s/include -I%s/include' % (self._windows_prefix, self.mingw_prefix, self.prefix()))
-        self.set('LINKFLAGS', '-L%s/lib -L%s/lib -L%s/lib' % (self._windows_prefix, self.mingw_prefix, self.prefix()))
+        self.set('CXXFLAGS', '-I%s/include -I%s/include -I%s/include' % (self._windows_prefix, self.mingw_prefix, self.work_dir(True)))
+        self.set('LINKFLAGS', '-L%s/lib -L%s/lib -L%s/lib' % (self._windows_prefix, self.mingw_prefix, self.work_dir(True)))
 
     def host(self):
         return '%s-w64-mingw32' % self.mingw_name
@@ -173,39 +176,98 @@ class WindowsEnvironment(HostEnvironment):
     def windows_prefix(self):
         return self._windows_prefix
 
-    def package(self, project, cscript):
-        self.build_dependencies(project, cscript)
-        self.build_self(project, cscript)
-        return cscript['package'](self)
 
+class Target:
+    def __init__(self, name):
+        if name.startswith('ubuntu-'):
+            self.platform = 'linux'
+            self.version = name.split('-')[1]
+            self.bits = int(name.split('-')[2])
+            self.environment = ChrootEnvironment(name)
+        elif name.startswith('windows-'):
+            self.platform = 'windows'
+            self.bits = int(name.split('-')[1])
+            self.environment = WindowsEnvironment(self.bits)
+            if self.bits == 32:
+                self.host = 'i686-w64-mingw32'
+            else:
+                self.hots = 'x86_64-w64-mingw32'
 
-def build_ubuntu(target):
-    env = ChrootEnvironment(target)
+class Project:
+    def __init__(self, name, specifier=None):
+        self.name = name
+        self.git_dir = '/home/carl/git'
+        self.version = None
 
+        tmp = tempfile.mkdtemp()
+#        os.command('git --git-dir=%s/%s.git show %s:cscript > %s/cscript' % (self.git_dir, self.name, self.specifier, tmp))
+#        os.command('git --git-dir=%s/%s.git show %s:wscript > %s/wscript' % (self.git_dir, self.name, self.specifier, tmp))
+        shutil.copyfile('/home/carl/src/cdist5/%s/cscript' % name, '%s/cscript' % tmp)
+        try:
+            shutil.copyfile('/home/carl/src/cdist5/%s/wscript' % name, '%s/wscript' % tmp)
+        except:
+            pass
+
+        self.cscript = {}
+        execfile('%s/cscript' % tmp, self.cscript)
+
+        if os.path.exists('%s/wscript' % tmp):
+            f = open('%s/wscript' % tmp, 'r')
+            version = None
+            while 1:
+                l = f.readline()
+                if l == '':
+                    break
+
+                s = l.split()
+                if len(s) == 3 and s[0] == "VERSION":
+                    self.version = Version(s[2])
+
+            f.close()
+
+        shutil.rmtree(tmp)
+
+    def version(self):
+        tmp = tempfile.mkdtemp()
+
+def copytree(a, b):
+    print 'copy %s -> %s' % (a, b)
+    shutil.copytree(a, b)
+
+def rmtree(a):
+    print 'remove %s' % a
+    shutil.rmtree(a, ignore_errors=True)
+
+def checkout(env, target, project):
+    # XXX: would be git clone
+    copytree('/home/carl/src/cdist5/%s' % project.name, '%s/src/%s' % (env.work_dir(), project.name))
+
+def build_dependencies(env, target, project):
+    if 'dependencies' in project.cscript:
+        for d in project.cscript['dependencies'](target):
+            build(env, target, Project(d))
+
+def build(env, target, project):
+    checkout(env, target, project)
+    os.chdir('%s/src/%s' % (env.work_dir(), project.name))
+    project.cscript['build'](env, target)
+
+def package(env, target, project):
+    if target.platform == 'linux':
+#        build_dependencies(env, target, project)
+#        checkout(env, target, project)
+        os.chdir('%s/src/%s' % (env.work_dir(), project.name))
+        project.cscript['package'](env, target, project.version)
     
-
-
-e = ChrootEnvironment('ubuntu-12.04-32')
-c = e.setup('dvdomatic', None)
-e.package('dvdomatic', c)
-#e.build('ffmpeg')
-#e.cleanup()
+target = Target('ubuntu-12.04-32')
+project = Project('dvdomatic')
+package(target.environment, target, project)
 
 sys.exit(0)
 
 def error(e):
     print 'Error: %s' % e
     sys.exit(1)
-
-def environment_factory(t):
-    if t.startswith('ubuntu-'):
-        return ChrootEnvironment(t)
-    if t.startswith('windows-'):
-        bits = int(t.split('-')[1])
-        if bits == 32 or bits == 64:
-            return WindowsEnvironment(bits)
-
-    error('invalid target %s' % t)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('command')
@@ -218,23 +280,25 @@ parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
 parser.add_argument('-t', '--target', help='target')
 args = parser.parse_args()
 
-if args.command is 'build':
+if args.command == 'build':
     if args.project is None:
         error('you must specify -p or --project')
     if args.target is None:
         error('you must specify -t or --target')
 
-    env = environment_factory(t)
-    cscript = env.setup(args.project, args.checkout)
-    env.build(args.project, cscript)
+    project = Project(args.project)
+    target = Target(args.target)
+    build_dependencies(target.environment, project, target)
+    build(target.environment, project, target)
 
-elif args.command is 'package':
+elif args.command == 'package':
     if args.project is None:
         error('you must specify -p or --project')
     if args.target is None:
         error('you must specify -t or --target')
         
-    env = environment_factory(t)
-    cscript = env.setup(args.project, args.checkout)
-    r = env.package(args.project)
-    shutil.copyfile(r, '%s/%s' % (args.output, os.path.basename(r)))
+    project = Project(args.project)
+    target = Target(args.target)
+    package(target.environment, project, target)
+
+elif args.command == '
