@@ -351,7 +351,7 @@ def append_version_to_changelog(version):
     try:
         f = open('ChangeLog', 'r')
     except:
-        warning('Could not open ChangeLog')
+        log('Could not open ChangeLog')
         return
 
     c = f.read()
@@ -364,7 +364,7 @@ def append_version_to_changelog(version):
 
 def append_version_to_debian_changelog(version):
     if not os.path.exists('debian'):
-        warning('Could not find debian directory')
+        log('Could not find debian directory')
         return
 
     command('dch -b -v %s-1 "New upstream release."' % version)
