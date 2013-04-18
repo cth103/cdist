@@ -1,0 +1,142 @@
+#!/usr/bin/python
+
+import os
+import shutil
+import tempfile
+
+class Environment(object):
+    def __init__(self):
+        self.environment = {}
+
+    def set(self, a, b):
+        self.environment[a] = b
+
+    def get(self, a):
+        return self.environment[a]
+
+    def environment_string(self):
+        e = ''
+        for k, v in self.environment.iteritems():
+            e += '%s="%s" ' % (k, v)
+        return e
+        
+    def checkout(self, project):
+        # XXX: would be git clone
+        shutil.copytree('/home/carl/src/cdist5/%s' % project, '%s/src/%s' % (self.work_dir(), project))
+
+    def read_cscript(self, project):
+        cscript = {}
+        execfile('%s/src/%s/cscript' % (self.work_dir(), project), cscript)
+        return cscript
+
+    # Install prefix (in sub-filesystem)
+    def prefix(self):
+        return self.work_dir(True)
+
+    def build(self, project):
+        self.checkout(project)
+        cscript = self.read_cscript(project)
+
+        if 'dependencies' in cscript:
+            for d in cscript['dependencies'](self):
+                self.build(d)
+
+        self.chdir('%s/src/%s' % (self.work_dir(True), project))
+        cscript['build'](self)
+
+        return cscript
+
+    def package(self, project):
+        cscript = self.build(project)
+        cscript['package'](self)
+
+
+class UbuntuEnvironment(Environment):
+    def __init__(self, chroot):
+        super(UbuntuEnvironment, self).__init__()
+        self.chroot = chroot
+        self.dir_in_chroot = '/home/carl'
+        self.chroot_dir = '/home/carl/Environments'
+        # cwd for command()s as a full path in the sub-filesystem
+        self.cwd = self.dir_in_chroot
+
+    def work_dir(self, sub = False):
+        if sub:
+            return '%s/%s%s' % (self.chroot_dir, self.chroot, self.dir_in_chroot)
+        else:
+            return self.dir_in_chroot
+
+    def command(self, c):
+        print 'schroot -> %s' % c
+        os.system('%s schroot -c %s -d %s -p -- %s' % (self.environment_string(), self.chroot, self.cwd, c))
+
+    # chdir in sub-filesystem
+    def chdir(self, d):
+        if len(d) > 0 and d[0] == '/':
+            self.cwd = d
+        else:
+            self.cwd += '/' + d
+
+
+class WindowsEnvironment(Environment):
+    def __init__(self, bits):
+        super(WindowsEnvironment, self).__init__()
+        self.set('PATH', os.environ['PATH'])
+        self.temp = tempfile.mkdtemp()
+        print 'temp is %s' % self.temp
+
+        self._bits = bits
+        self._windows_prefix = '/home/carl/Environments/windows/%d' % self._bits
+        if self._bits == 32:
+            self.mingw_name = 'i686'
+        else:
+            self.mingw_name = 'x86_64'
+
+        self.mingw_path = '/mingw/bin'
+        self.mingw_prefix = '/mingw/%s-w64-mingw32' % self.mingw_name
+
+        self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self._windows_prefix)
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.prefix())
+        self.set('PATH', '%s/bin:%s:%s' % (self._windows_prefix, self.mingw_path, self.get('PATH')))
+        self.set('CC', '%s-w64-mingw32-gcc' % self.mingw_name)
+        self.set('CXX', '%s-w64-mingw32-g++' % self.mingw_name)
+        self.set('LD', '%s-w64-mingw32-ld' % self.mingw_name)
+        self.set('RANLIB', '%s-w64-mingw32-ranlib' % self.mingw_name)
+        self.set('WINRC', '%s-w64-mingw32-windres' % self.mingw_name)
+        self.set('CXXFLAGS', '-I%s/include -I%s/include -I%s/include' % (self._windows_prefix, self.mingw_prefix, self.prefix()))
+        self.set('LINKFLAGS', '-L%s/lib -L%s/lib -L%s/lib' % (self._windows_prefix, self.mingw_prefix, self.prefix()))
+
+    def work_dir(self, sub = False):
+        return self.temp
+
+    def command(self, c):
+        print 'base -> %s' % c
+        print self.environment_string()
+        os.system('%s %s' % (self.environment_string(), c))
+
+    # chdir in sub-filesystem
+    def chdir(self, d):
+        os.chdir(d)
+
+    def cleanup(self):
+        shutil.rmtree(self.temp)
+
+    def host(self):
+        return '%s-w64-mingw32' % self.mingw_name
+
+    def target_type(self):
+        return 'windows'
+
+    def bits(self):
+        return self._bits
+
+    def windows_prefix(self):
+        return self._windows_prefix
+
+# XXX
+# shutil.rmtree('/home/carl/Environments/ubuntu-12.04-32/home/carl/src')
+
+e = WindowsEnvironment(32)
+e.package('dvdomatic')
+#e.build('ffmpeg')
+#e.cleanup()
