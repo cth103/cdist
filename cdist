@@ -152,7 +152,7 @@ class Environment(object):
     def build_dependencies(self, target, project):
         if 'dependencies' in project.cscript:
             for d in project.cscript['dependencies'](target):
-                self.build(target, Project(d))
+                self.build(target, Project(d[0], d[1]))
 
     def build(self, target, project):
         self.checkout(project)
@@ -274,7 +274,7 @@ class WindowsEnvironment(HostEnvironment):
 
 class Target:
     def __init__(self, name):
-        if name.startswith('ubuntu-'):
+        if name.startswith('ubuntu-') or name.startswith('debian-'):
             self.platform = 'linux'
             self.version = name.split('-')[1]
             self.bits = int(name.split('-')[2])
