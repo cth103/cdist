@@ -410,7 +410,7 @@ elif args.command == 'package':
     env = target.environment
     r = env.package(target, project)
     if target.platform == 'linux':
-        out = '%s-%d' % (target.version, target.bits)
+        out = '%s/%s-%d' % (args.output, target.version, target.bits)
         try:
             os.makedirs(out)
         except:
