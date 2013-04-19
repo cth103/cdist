@@ -409,7 +409,15 @@ elif args.command == 'package':
     target = Target(args.target)
     env = target.environment
     r = env.package(target, project)
-    copyfile(r, '%s/%s' % (args.output, os.path.basename(r)))
+    if target.platform == 'linux':
+        out = '%s-%d' % (target.version, target.bits)
+        try:
+            os.makedirs(out)
+        except:
+            pass
+        copyfile(r, '%s/%s' % (out, os.path.basename(r)))
+    else:
+        copyfile(r, '%s/%s' % (args.output, os.path.basename(r)))
 
     env.cleanup()
 
