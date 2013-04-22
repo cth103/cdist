@@ -408,16 +408,22 @@ elif args.command == 'package':
         
     target = Target(args.target)
     env = target.environment
-    r = env.package(target, project)
+
+    packages = env.package(target, project)
+    if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
+        packages = [packages]
+
     if target.platform == 'linux':
         out = '%s/%s-%d' % (args.output, target.version, target.bits)
         try:
             os.makedirs(out)
         except:
             pass
-        copyfile(r, '%s/%s' % (out, os.path.basename(r)))
+        for p in packages:
+            copyfile(r, '%s/%s' % (out, os.path.basename(p)))
     else:
-        copyfile(r, '%s/%s' % (args.output, os.path.basename(r)))
+        for p in packages:
+            copyfile(r, '%s/%s' % (args.output, os.path.basename(p)))
 
     env.cleanup()
 
