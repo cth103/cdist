@@ -420,10 +420,10 @@ elif args.command == 'package':
         except:
             pass
         for p in packages:
-            copyfile(r, '%s/%s' % (out, os.path.basename(p)))
+            copyfile(p, '%s/%s' % (out, os.path.basename(p)))
     else:
         for p in packages:
-            copyfile(r, '%s/%s' % (args.output, os.path.basename(p)))
+            copyfile(p, '%s/%s' % (args.output, os.path.basename(p)))
 
     env.cleanup()
 
