@@ -518,6 +518,19 @@ elif args.command == 'manual':
 
     env.cleanup()
 
+elif args.command == 'doxygen':
+    env = HostEnvironment()
+    env.checkout(project)
+
+    dirs = project.cscript['make_doxygen'](env)
+    if hasattr(dirs, 'strip') or (not hasattr(dirs, '__getitem__') and not hasattr(dirs, '__iter__')):
+        dirs = [dirs]
+
+    for d in dirs:
+        copytree(d, '%s/%s' % (args.output, 'doc'))
+
+    env.cleanup()
+
 elif args.command == 'latest':
     env = HostEnvironment()
     env.checkout(project)
@@ -534,3 +547,6 @@ elif args.command == 'latest':
 
     print latest
     env.cleanup()
+
+else:
+    error('invalid command %s' % args.command)
