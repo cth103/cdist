@@ -136,33 +136,22 @@ class Environment(object):
 
     def work_dir_cscript(self):
         assert(false)
-        
-    def checkout(self, project):
-        flags = ''
-        redirect = ''
-        if args.quiet:
-            flags = '-q'
-            redirect = '>/dev/null'
-        command('git clone %s %s/%s.git %s/src/%s' % (flags, project.git_dir, project.name, self.work_dir_cdist(), project.name))
-        os.chdir('%s/src/%s' % (self.work_dir_cdist(), project.name))
-        command('git checkout %s %s %s' % (flags, project.specifier, redirect))
-        command('git submodule init')
-        command('git submodule update')
 
     def build_dependencies(self, target, project):
         if 'dependencies' in project.cscript:
             for d in project.cscript['dependencies'](target):
-                self.build(target, Project(d[0], d[1]))
+                print d[0], d[1]
+                dep = Project(d[0], d[1])
+                dep.checkout(self)
+                self.build(target, dep)
 
     def build(self, target, project):
-        self.checkout(project)
         project.cscript['build'](self, target)
 
     def package(self, target, project):
-        print 'hello'
+        project.checkout(self)
         if target.platform != 'source':
             self.build_dependencies(target, project)
-        self.checkout(project)
         if target.platform == 'source':
             command('./waf dist')
             return os.path.abspath('%s-%s.tar.bz2' % (project.name, project.version))
@@ -298,21 +287,30 @@ class Target:
 class Project(object):
     def __init__(self, name, specifier=None):
         self.name = name
-        self.git_dir = '/home/carl/git'
+        self.git_dir = 'ssh://houllier/home/carl/git'
         self.version = None
         self.specifier = specifier
         if self.specifier is None:
             self.specifier = 'master'
 
-        tmp = tempfile.mkdtemp()
-        command('git --git-dir=%s/%s.git show %s:cscript > %s/cscript' % (self.git_dir, self.name, self.specifier, tmp))
-        command('git --git-dir=%s/%s.git show %s:wscript > %s/wscript' % (self.git_dir, self.name, self.specifier, tmp), can_fail=True)
+    def checkout(self, env):
+        print 'CHECKOUT %s' % self.name
+        flags = ''
+        redirect = ''
+        if args.quiet:
+            flags = '-q'
+            redirect = '>/dev/null'
+        command('git clone --depth 0 %s %s/%s.git %s/src/%s' % (flags, self.git_dir, self.name, env.work_dir_cdist(), self.name))
+        os.chdir('%s/src/%s' % (env.work_dir_cdist(), self.name))
+        command('git checkout %s %s %s' % (flags, self.specifier, redirect))
+        command('git submodule init')
+        command('git submodule update')
 
         self.cscript = {}
-        execfile('%s/cscript' % tmp, self.cscript)
-
-        if os.path.exists('%s/wscript' % tmp):
-            f = open('%s/wscript' % tmp, 'r')
+        execfile('%s/src/%s/cscript' % (env.work_dir_cdist(), self.name), self.cscript)
+        
+        if os.path.exists('%s/src/%s/wscript' % (env.work_dir_cdist(), self.name)):
+            f = open('%s/src/%s/wscript' % (env.work_dir_cdist(), self.name), 'r')
             version = None
             while 1:
                 l = f.readline()
@@ -324,8 +322,6 @@ class Project(object):
                     self.version = Version(s[2])
 
             f.close()
-
-        rmtree(tmp)
 
 
 def set_version_in_wscript(version):
@@ -397,6 +393,9 @@ if args.command == 'build':
 
     target = Target(args.target)
     env = target.environment
+    print '1st checkout'
+    project.checkout(env)
+    print 'deps'
     env.build_dependencies(target, project)
     env.build(target, project)
 
@@ -432,7 +431,7 @@ elif args.command == 'release':
         error('you must specify --full or --beta')
 
     env = HostEnvironment()
-    env.checkout(project)
+    project.checkout(env)
 
     version = project.version
     if args.full:
@@ -459,7 +458,7 @@ elif args.command == 'release':
 
 elif args.command == 'pot':
     env = HostEnvironment()
-    env.checkout(project)
+    project.checkout(env)
 
     pots = project.cscript['make_pot'](env)
     for p in pots:
@@ -469,7 +468,7 @@ elif args.command == 'pot':
 
 elif args.command == 'changelog':
     env = HostEnvironment()
-    env.checkout(project)
+    project.checkout(env)
 
     text = open('ChangeLog', 'r')
     html = open('%s/changelog.html' % args.output, 'w')
@@ -510,7 +509,7 @@ elif args.command == 'changelog':
 
 elif args.command == 'manual':
     env = HostEnvironment()
-    env.checkout(project)
+    project.checkout(env)
 
     dirs = project.cscript['make_manual'](env)
     for d in dirs:
@@ -520,7 +519,7 @@ elif args.command == 'manual':
 
 elif args.command == 'doxygen':
     env = HostEnvironment()
-    env.checkout(project)
+    project.checkout(env)
 
     dirs = project.cscript['make_doxygen'](env)
     if hasattr(dirs, 'strip') or (not hasattr(dirs, '__getitem__') and not hasattr(dirs, '__iter__')):
@@ -533,7 +532,7 @@ elif args.command == 'doxygen':
 
 elif args.command == 'latest':
     env = HostEnvironment()
-    env.checkout(project)
+    project.checkout(env)
 
     f = command_and_read('git log --tags --simplify-by-decoration --pretty="%d"')
     t = f.readline()
