@@ -138,12 +138,13 @@ class Environment(object):
         assert(false)
 
     def build_dependencies(self, target, project):
+        cwd = os.getcwd()
         if 'dependencies' in project.cscript:
             for d in project.cscript['dependencies'](target):
-                print d[0], d[1]
                 dep = Project(d[0], d[1])
                 dep.checkout(self)
                 self.build(target, dep)
+        os.chdir(cwd)
 
     def build(self, target, project):
         project.cscript['build'](self, target)
@@ -196,7 +197,7 @@ class ChrootEnvironment(Environment):
         assert(cwd.startswith(prefix))
         cwd = cwd[len(prefix):]
 
-        log('schroot[%s] -> %s' % (cwd, c))
+        log('schroot [%s] -> %s' % (cwd, c))
         command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
 
 #
@@ -294,7 +295,6 @@ class Project(object):
             self.specifier = 'master'
 
     def checkout(self, env):
-        print 'CHECKOUT %s' % self.name
         flags = ''
         redirect = ''
         if args.quiet:
@@ -393,9 +393,7 @@ if args.command == 'build':
 
     target = Target(args.target)
     env = target.environment
-    print '1st checkout'
     project.checkout(env)
-    print 'deps'
     env.build_dependencies(target, project)
     env.build(target, project)
 
