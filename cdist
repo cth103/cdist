@@ -220,6 +220,8 @@ class HostEnvironment(Environment):
         command('%s %s' % (self.variables_string(), c))
 
     def cleanup(self):
+        if args.keep:
+            shutil.copytree('%s/src/%s' % (self.temp, args.project), '%s/%s' % (args.output, args.project))
         rmtree(self.temp)
 
 
@@ -378,6 +380,7 @@ parser.add_argument('-c', '--checkout', help='string to pass to git for checkout
 parser.add_argument('-o', '--output', help='output directory', default='.')
 parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
 parser.add_argument('-t', '--target', help='target')
+parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
 args = parser.parse_args()
 
 args.output = os.path.abspath(args.output)
