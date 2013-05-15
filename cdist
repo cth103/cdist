@@ -205,59 +205,53 @@ class ChrootEnvironment(Environment):
 #
 
 class HostEnvironment(Environment):
-    def __init__(self):
+    def __init__(self, directory):
         super(HostEnvironment, self).__init__()
-        self.temp = tempfile.mkdtemp()
+        if directory is None:
+            self.directory = tempfile.mkdtemp()
+            self.rmdir = True
+        else:
+            self.directory = directory
+            self.rmdir = False
 
     def work_dir_cdist(self):
-        return self.temp
+        return self.directory
 
     def work_dir_cscript(self):
-        return self.temp
+        return self.directory
 
     def command(self, c):
         log('host -> %s' % c)
         command('%s %s' % (self.variables_string(), c))
 
     def cleanup(self):
-        if args.keep:
-            shutil.copytree('%s/src/%s' % (self.temp, args.project), '%s/%s' % (args.output, args.project))
-        rmtree(self.temp)
+        if self.rmdir:
+            rmtree(self.temp)
 
 
-#
-# WindowsEnvironment
-#
+def prepare_for_windows(env, bits):
+    env.windows_prefix = '/home/carl/Environments/windows/%d' % bits
+    if not os.path.exists(env.windows_prefix):
+        error('windows prefix %s does not exist' % env.windows_prefix)
 
-class WindowsEnvironment(HostEnvironment):
-    def __init__(self, bits):
-        super(WindowsEnvironment, self).__init__()
+    if bits == 32:
+        mingw_name = 'i686'
+    else:
+        mingw_name = 'x86_64'
 
-        self._windows_prefix = '/home/carl/Environments/windows/%d' % bits
-        if not os.path.exists(self._windows_prefix):
-            error('windows prefix %s does not exist' % self._windows_prefix)
+    mingw_path = '/mingw/bin'
+    mingw_prefix = '/mingw/%s-w64-mingw32' % mingw_name
 
-        if bits == 32:
-            self.mingw_name = 'i686'
-        else:
-            self.mingw_name = 'x86_64'
-
-        self.mingw_path = '/mingw/bin'
-        self.mingw_prefix = '/mingw/%s-w64-mingw32' % self.mingw_name
-
-        self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self._windows_prefix)
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
-        self.set('PATH', '%s/bin:%s:%s' % (self._windows_prefix, self.mingw_path, os.environ['PATH']))
-        self.set('CC', '%s-w64-mingw32-gcc' % self.mingw_name)
-        self.set('CXX', '%s-w64-mingw32-g++' % self.mingw_name)
-        self.set('LD', '%s-w64-mingw32-ld' % self.mingw_name)
-        self.set('RANLIB', '%s-w64-mingw32-ranlib' % self.mingw_name)
-        self.set('WINRC', '%s-w64-mingw32-windres' % self.mingw_name)
-        self.set('CXXFLAGS', '-I%s/include -I%s/include -I%s/include' % (self._windows_prefix, self.mingw_prefix, self.work_dir_cscript()))
-        self.set('LINKFLAGS', '-L%s/lib -L%s/lib -L%s/lib' % (self._windows_prefix, self.mingw_prefix, self.work_dir_cscript()))
-
-    def windows_prefix(self):
-        return self._windows_prefix
+    env.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % env.windows_prefix)
+    env.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % env.work_dir_cscript())
+    env.set('PATH', '%s/bin:%s:%s' % (env.windows_prefix, mingw_path, os.environ['PATH']))
+    env.set('CC', '%s-w64-mingw32-gcc' % mingw_name)
+    env.set('CXX', '%s-w64-mingw32-g++' % mingw_name)
+    env.set('LD', '%s-w64-mingw32-ld' % mingw_name)
+    env.set('RANLIB', '%s-w64-mingw32-ranlib' % mingw_name)
+    env.set('WINRC', '%s-w64-mingw32-windres' % mingw_name)
+    env.set('CXXFLAGS', '-I%s/include -I%s/include -I%s/include' % (env.windows_prefix, mingw_prefix, env.work_dir_cscript()))
+    env.set('LINKFLAGS', '-L%s/lib -L%s/lib -L%s/lib' % (env.windows_prefix, mingw_prefix, env.work_dir_cscript()))
 
 
 #
@@ -271,14 +265,23 @@ class Target:
             self.platform = 'linux'
             self.version = name.split('-')[1]
             self.bits = int(name.split('-')[2])
-            self.environment = ChrootEnvironment(name)
         elif name.startswith('windows-'):
             self.platform = 'windows'
             self.bits = int(name.split('-')[1])
-            self.environment = WindowsEnvironment(self.bits)
         elif name == 'source':
             self.platform = 'source'
-            self.environment = HostEnvironment()
+
+def environment_for_target(target, directory):
+    if target.platform == 'linux':
+        return ChrootEnvironment(target.name)
+    elif target.platform == 'windows':
+        env = HostEnvironment(directory)
+        prepare_for_windows(env, target.bits)
+        return env
+    elif target.platform == 'source':
+        return HostEnvironment()
+
+    return None
 
 #
 # Project
@@ -305,8 +308,7 @@ class Project(object):
         command('git submodule init')
         command('git submodule update')
 
-        self.cscript = {}
-        execfile('%s/src/%s/cscript' % (env.work_dir_cdist(), self.name), self.cscript)
+        self.read_cscript('%s/src/%s/cscript' % (env.work_dir_cdist(), self.name))
         
         if os.path.exists('%s/src/%s/wscript' % (env.work_dir_cdist(), self.name)):
             f = open('%s/src/%s/wscript' % (env.work_dir_cdist(), self.name), 'r')
@@ -322,6 +324,9 @@ class Project(object):
 
             f.close()
 
+    def read_cscript(self, s):
+        self.cscript = {}
+        execfile(s, self.cscript)
 
 def set_version_in_wscript(version):
     f = open('wscript', 'rw')
@@ -392,7 +397,7 @@ if args.command == 'build':
         error('you must specify -t or --target')
 
     target = Target(args.target)
-    env = target.environment
+    env = environment_for_target(target)
     project.checkout(env)
     env.build_dependencies(target, project)
     env.build(target, project)
@@ -404,7 +409,7 @@ elif args.command == 'package':
         error('you must specify -t or --target')
         
     target = Target(args.target)
-    env = target.environment
+    env = environment_for_target(target)
 
     packages = env.package(target, project)
     if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
@@ -544,6 +549,15 @@ elif args.command == 'latest':
 
     print latest
     env.cleanup()
+
+elif args.command == 'test':
+    if args.target is None:
+        error('you must specify -t or --target')
+
+    target = Target(args.target)
+    env = environment_for_target(target, '.')
+    project.read_cscript('cscript')
+    env.build(target, project)
 
 else:
     error('invalid command %s' % args.command)
