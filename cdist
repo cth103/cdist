@@ -276,10 +276,6 @@ class Target:
             self.platform = 'windows'
             self.bits = int(name.split('-')[1])
             self.environment = WindowsEnvironment(self.bits)
-            if self.bits == 32:
-                self.host = 'i686-w64-mingw32'
-            else:
-                self.hots = 'x86_64-w64-mingw32'
         elif name == 'source':
             self.platform = 'source'
             self.environment = HostEnvironment()
