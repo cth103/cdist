@@ -205,7 +205,7 @@ class ChrootEnvironment(Environment):
 #
 
 class HostEnvironment(Environment):
-    def __init__(self, directory):
+    def __init__(self, directory=None):
         super(HostEnvironment, self).__init__()
         if directory is None:
             self.directory = tempfile.mkdtemp()
