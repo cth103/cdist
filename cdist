@@ -226,7 +226,7 @@ class HostEnvironment(Environment):
 
     def cleanup(self):
         if self.rmdir:
-            rmtree(self.temp)
+            rmtree(self.directory)
 
 
 def prepare_for_windows(env, bits):
