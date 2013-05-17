@@ -414,7 +414,7 @@ elif args.command == 'package':
         error('you must specify -t or --target')
         
     target = Target(args.target)
-    env = environment_for_target(target)
+    env = environment_for_target(target, None)
 
     packages = env.package(target, project)
     if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
