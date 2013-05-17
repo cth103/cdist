@@ -240,7 +240,7 @@ def prepare_for_windows(env, bits):
         mingw_name = 'x86_64'
 
     mingw_path = '/mingw/bin'
-    mingw_prefix = '/mingw/%s-w64-mingw32' % mingw_name
+    mingw_prefixes = ['/mingw', '/mingw/%s-w64-mingw32' % mingw_name]
 
     env.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % env.windows_prefix)
     env.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % env.work_dir_cscript())
@@ -250,8 +250,13 @@ def prepare_for_windows(env, bits):
     env.set('LD', '%s-w64-mingw32-ld' % mingw_name)
     env.set('RANLIB', '%s-w64-mingw32-ranlib' % mingw_name)
     env.set('WINRC', '%s-w64-mingw32-windres' % mingw_name)
-    env.set('CXXFLAGS', '-I%s/include -I%s/include -I%s/include' % (env.windows_prefix, mingw_prefix, env.work_dir_cscript()))
-    env.set('LINKFLAGS', '-L%s/lib -L%s/lib -L%s/lib' % (env.windows_prefix, mingw_prefix, env.work_dir_cscript()))
+    cxx = '-I%s/include -I%s/include' % (env.windows_prefix, env.work_dir_cscript())
+    link = '-L%s/lib -L%s/lib' % (env.windows_prefix, env.work_dir_cscript())
+    for p in mingw_prefixes:
+        cxx += ' -I%s/include' % p
+        link += ' -L%s/lib' % p
+    env.set('CXXFLAGS', cxx)
+    env.set('LINKFLAGS', link)
 
 
 #
