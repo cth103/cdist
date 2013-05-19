@@ -141,7 +141,7 @@ class Environment(object):
         cwd = os.getcwd()
         if 'dependencies' in project.cscript:
             for d in project.cscript['dependencies'](target):
-                dep = Project(d[0], d[1])
+                dep = Project(d[0], '.', d[1])
                 dep.checkout(self)
                 self.build(target, dep)
         os.chdir(cwd)
@@ -293,8 +293,9 @@ def environment_for_target(target, directory):
 #
  
 class Project(object):
-    def __init__(self, name, specifier=None):
+    def __init__(self, name, directory, specifier=None):
         self.name = name
+        self.directory = directory
         self.git_dir = 'ssh://houllier/home/carl/git'
         self.version = None
         self.specifier = specifier
@@ -312,11 +313,14 @@ class Project(object):
         command('git checkout %s %s %s' % (flags, self.specifier, redirect))
         command('git submodule init')
         command('git submodule update')
+        os.chdir(self.directory)
 
-        self.read_cscript('%s/src/%s/cscript' % (env.work_dir_cdist(), self.name))
+        proj = '%s/src/%s/%s' % (env.work_dir_cdist(), self.name, self.directory)
+
+        self.read_cscript('%s/cscript' % proj)
         
-        if os.path.exists('%s/src/%s/wscript' % (env.work_dir_cdist(), self.name)):
-            f = open('%s/src/%s/wscript' % (env.work_dir_cdist(), self.name), 'r')
+        if os.path.exists('%s/wscript' % proj):
+            f = open('%s/wscript' % proj, 'r')
             version = None
             while 1:
                 l = f.readline()
@@ -381,6 +385,7 @@ def append_version_to_debian_changelog(version):
 parser = argparse.ArgumentParser()
 parser.add_argument('command')
 parser.add_argument('-p', '--project', help='project name', required=True)
+parser.add_argument('-d', '--directory', help='directory within project repo', default='.')
 parser.add_argument('--beta', help='beta release', action='store_true')
 parser.add_argument('--full', help='full release', action='store_true')
 parser.add_argument('-c', '--checkout', help='string to pass to git for checkout')
@@ -395,7 +400,7 @@ args.output = os.path.abspath(args.output)
 if args.project is None:
     error('you must specify -p or --project')
 
-project = Project(args.project, args.checkout)
+project = Project(args.project, args.directory, args.checkout)
 
 if args.command == 'build':
     if args.target is None:
