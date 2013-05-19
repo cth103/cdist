@@ -38,7 +38,7 @@ def command(c, can_fail=False):
     log(c)
     r = os.system(c)
     if (r >> 8) and not can_fail:
-        error('command failed')
+        error('command %s failed' % c)
 
 def command_and_read(c):
     log(c)
@@ -155,6 +155,8 @@ class Environment(object):
             self.build_dependencies(target, project)
         if target.platform == 'source':
             command('./waf dist')
+            if project.directory != '.':
+                return os.path.abspath('%s-%s.tar.bz2' % (project.directory, project.version))
             return os.path.abspath('%s-%s.tar.bz2' % (project.name, project.version))
         else:
             project.cscript['build'](self, target)
