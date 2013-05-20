@@ -241,8 +241,8 @@ def prepare_for_windows(env, bits):
     else:
         mingw_name = 'x86_64'
 
-    mingw_path = '/mingw/bin'
-    mingw_prefixes = ['/mingw', '/mingw/%s-w64-mingw32' % mingw_name]
+    mingw_path = '/mingw/%d/bin' % bits
+    mingw_prefixes = ['/mingw/%d' % bits, '/mingw/%d/%s-w64-mingw32' % (bits, mingw_name)]
 
     env.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % env.windows_prefix)
     env.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % env.work_dir_cscript())
