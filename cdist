@@ -1,5 +1,34 @@
 #!/usr/bin/python
 
+#    Copyright (C) 2012 Carl Hetherington <cth@carlh.net>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+#
+# Configuration
+#
+
+# Directory to build things in within chroots
+DIR_IN_CHROOT = '/home/carl'
+# Prefix of chroots in the filesystem
+CHROOT_PREFIX = '/home/carl/Environments'
+# Prefix of windows environments
+WINDOWS_ENVIRONMENT_PREFIX = '/home/carl/Environments/windows'
+# Git prefix
+GIT_DIR = 'ssh://houllier/home/carl/git'
+
 import os
 import sys
 import shutil
@@ -173,8 +202,8 @@ class ChrootEnvironment(Environment):
     def __init__(self, chroot):
         super(ChrootEnvironment, self).__init__()
         self.chroot = chroot
-        self.dir_in_chroot = '/home/carl'
-        self.chroot_dir = '/home/carl/Environments'
+        self.dir_in_chroot = DIR_IN_CHROOT
+        self.chroot_dir = CHROOT_PREFIX
 
         # ChrootEnvironments work in dir_in_chroot, and clear
         # it out before use
@@ -232,7 +261,7 @@ class HostEnvironment(Environment):
 
 
 def prepare_for_windows(env, bits):
-    env.windows_prefix = '/home/carl/Environments/windows/%d' % bits
+    env.windows_prefix = '%s/%d' % (WINDOWS_ENVIRONMENT_PREFIX, bits)
     if not os.path.exists(env.windows_prefix):
         error('windows prefix %s does not exist' % env.windows_prefix)
 
@@ -298,7 +327,7 @@ class Project(object):
     def __init__(self, name, directory, specifier=None):
         self.name = name
         self.directory = directory
-        self.git_dir = 'ssh://houllier/home/carl/git'
+        self.git_dir = GIT_DIR
         self.version = None
         self.specifier = specifier
         if self.specifier is None:
