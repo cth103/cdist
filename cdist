@@ -409,7 +409,7 @@ if args.command == 'build':
         error('you must specify -t or --target')
 
     target = Target(args.target)
-    env = environment_for_target(target)
+    env = environment_for_target(target, None)
     project.checkout(env)
     env.build_dependencies(target, project)
     env.build(target, project)
