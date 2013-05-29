@@ -162,10 +162,12 @@ class Environment(object):
     def get(self, a):
         return self.variables[a]
 
-    def variables_string(self):
+    def variables_string(self, escaped_quotes=False):
         e = ''
         for k, v in self.variables.iteritems():
-            e += '%s="%s" ' % (k, v)
+            if escaped_quotes:
+                v = v.replace('"', '\\"')
+            e += '%s=%s ' % (k, v)
         return e
 
     def work_dir_cdist(self, sub):
@@ -257,10 +259,10 @@ class RemoteEnvironment(Environment):
             rmtree(g)
 
         # Environment variables
-        self.set('CXXFLAGS', '-I%s/include' % OSX_ENVIRONMENT_PREFIX)
-        self.set('LINKFLAGS', '-L%s/lib' % OSX_ENVIRONMENT_PREFIX)
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % OSX_ENVIRONMENT_PREFIX)
-        self.set('PATH', '$PATH:/usr/local/bin')
+        self.set('CXXFLAGS', '"-I%s/include -I%s/include"' % (self.dir_on_host, OSX_ENVIRONMENT_PREFIX))
+        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib"' % (self.dir_on_host, OSX_ENVIRONMENT_PREFIX))
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig' % (self.dir_on_host, OSX_ENVIRONMENT_PREFIX))
+        self.set('PATH', '$PATH:/usr/local/bin:%s/bin' % OSX_ENVIRONMENT_PREFIX)
 
     def work_dir_cdist(self):
         return self.host_mount_dir
@@ -275,7 +277,7 @@ class RemoteEnvironment(Environment):
         cwd = cwd[len(self.host_mount_dir):]
 
         log('ssh [%s] -> %s' % (cwd, c))
-        command('ssh %s -- "cd %s%s; %s %s"' % (self.host, self.dir_on_host, cwd, self.variables_string(), c))
+        command('ssh %s -- "cd %s%s; %s %s"' % (self.host, self.dir_on_host, cwd, self.variables_string(True), c))
 
     def cleanup(self):
         os.chdir('/')
