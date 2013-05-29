@@ -339,8 +339,8 @@ def prepare_for_windows(env, bits):
     for p in mingw_prefixes:
         cxx += ' -I%s/include' % p
         link += ' -L%s/lib' % p
-    env.set('CXXFLAGS', cxx)
-    env.set('LINKFLAGS', link)
+    env.set('CXXFLAGS', '"%s"' % cxx)
+    env.set('LINKFLAGS', '"%s"' % link)
 
 
 #
