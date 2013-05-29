@@ -28,6 +28,10 @@ CHROOT_PREFIX = '/home/carl/Environments'
 WINDOWS_ENVIRONMENT_PREFIX = '/home/carl/Environments/windows'
 # Git prefix
 GIT_DIR = 'ssh://houllier/home/carl/git'
+OSX_BUILD_HOST = 'carl@192.168.1.94'
+DIR_ON_HOST = '/Users/carl/cdist'
+OSX_ENVIRONMENT_PREFIX = '/Users/carl/Environments/osx/10.8'
+
 
 import os
 import sys
@@ -58,6 +62,10 @@ def copytree(a, b):
 def copyfile(a, b):
     log('copy %s -> %s' % (a, b))
     shutil.copyfile(a, b)
+
+def rmdir(a):
+    log('remove %s' % a)
+    os.rmdir(a)
 
 def rmtree(a):
     log('remove %s' % a)
@@ -231,6 +239,49 @@ class ChrootEnvironment(Environment):
         log('schroot [%s] -> %s' % (cwd, c))
         command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
 
+
+#
+# RemoteEnvironment
+#
+
+class RemoteEnvironment(Environment):
+    def __init__(self, host):
+        super(RemoteEnvironment, self).__init__()
+        self.host = host
+        self.dir_on_host = DIR_ON_HOST
+        self.host_mount_dir = tempfile.mkdtemp()
+
+        # Mount the remote host on host_mount_dir
+        command('sshfs %s:%s %s' % (self.host, self.dir_on_host, self.host_mount_dir))
+        for g in glob.glob('%s/*' % self.host_mount_dir):
+            rmtree(g)
+
+        # Environment variables
+        self.set('CXXFLAGS', '-I%s/include' % OSX_ENVIRONMENT_PREFIX)
+        self.set('LINKFLAGS', '-L%s/lib' % OSX_ENVIRONMENT_PREFIX)
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % OSX_ENVIRONMENT_PREFIX)
+        self.set('PATH', '$PATH:/usr/local/bin')
+
+    def work_dir_cdist(self):
+        return self.host_mount_dir
+
+    def work_dir_cscript(self):
+        return self.dir_on_host
+
+    def command(self, c):
+        # Work out the cwd for the chrooted command
+        cwd = os.getcwd()
+        assert(cwd.startswith(self.host_mount_dir))
+        cwd = cwd[len(self.host_mount_dir):]
+
+        log('ssh [%s] -> %s' % (cwd, c))
+        command('ssh %s -- "cd %s%s; %s %s"' % (self.host, self.dir_on_host, cwd, self.variables_string(), c))
+
+    def cleanup(self):
+        os.chdir('/')
+        command('fusermount -u %s' % self.host_mount_dir)
+        rmdir(self.host_mount_dir)
+
 #
 # HostEnvironment
 #
@@ -304,6 +355,8 @@ class Target:
         elif name.startswith('windows-'):
             self.platform = 'windows'
             self.bits = int(name.split('-')[1])
+        elif name == 'osx':
+            self.platform = 'osx'
         elif name == 'source':
             self.platform = 'source'
 
@@ -313,6 +366,9 @@ def environment_for_target(target, directory):
     elif target.platform == 'windows':
         env = HostEnvironment(directory)
         prepare_for_windows(env, target.bits)
+        return env
+    elif target.platform == 'osx':
+        env = RemoteEnvironment(OSX_BUILD_HOST)
         return env
     elif target.platform == 'source':
         return HostEnvironment()
