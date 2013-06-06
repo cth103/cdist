@@ -262,7 +262,7 @@ class RemoteEnvironment(Environment):
         self.set('CXXFLAGS', '"-I%s/include -I%s/include"' % (self.dir_on_host, OSX_ENVIRONMENT_PREFIX))
         self.set('LINKFLAGS', '"-L%s/lib -L%s/lib"' % (self.dir_on_host, OSX_ENVIRONMENT_PREFIX))
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig' % (self.dir_on_host, OSX_ENVIRONMENT_PREFIX))
-        self.set('PATH', '$PATH:/usr/local/bin:%s/bin' % OSX_ENVIRONMENT_PREFIX)
+        self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % OSX_ENVIRONMENT_PREFIX)
 
     def work_dir_cdist(self):
         return self.host_mount_dir
@@ -277,7 +277,7 @@ class RemoteEnvironment(Environment):
         cwd = cwd[len(self.host_mount_dir):]
 
         log('ssh [%s] -> %s' % (cwd, c))
-        command('ssh %s -- "PATH=/usr/bin:/sbin cd %s%s; %s %s"' % (self.host, self.dir_on_host, cwd, self.variables_string(True), c))
+        command('ssh %s -- "cd %s%s; %s %s"' % (self.host, self.dir_on_host, cwd, self.variables_string(True), c))
 
     def cleanup(self):
         os.chdir('/')
