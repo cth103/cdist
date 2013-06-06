@@ -277,7 +277,7 @@ class RemoteEnvironment(Environment):
         cwd = cwd[len(self.host_mount_dir):]
 
         log('ssh [%s] -> %s' % (cwd, c))
-        command('ssh %s -- "cd %s%s; %s %s"' % (self.host, self.dir_on_host, cwd, self.variables_string(True), c))
+        command('ssh %s -- "PATH=/usr/bin cd %s%s; %s %s"' % (self.host, self.dir_on_host, cwd, self.variables_string(True), c))
 
     def cleanup(self):
         os.chdir('/')
