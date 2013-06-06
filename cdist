@@ -28,7 +28,7 @@ CHROOT_PREFIX = '/home/carl/Environments'
 WINDOWS_ENVIRONMENT_PREFIX = '/home/carl/Environments/windows'
 # Git prefix
 GIT_DIR = 'ssh://houllier/home/carl/git'
-OSX_BUILD_HOST = 'carl@192.168.1.94'
+OSX_BUILD_HOST = 'carl@192.168.1.202'
 DIR_ON_HOST = '/Users/carl/cdist'
 OSX_ENVIRONMENT_PREFIX = '/Users/carl/Environments/osx/10.8'
 
