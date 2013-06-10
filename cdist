@@ -30,7 +30,7 @@ WINDOWS_ENVIRONMENT_PREFIX = '/home/carl/Environments/windows'
 GIT_DIR = 'ssh://houllier/home/carl/git'
 OSX_BUILD_HOST = 'carl@192.168.1.202'
 DIR_ON_HOST = '/Users/carl/cdist'
-OSX_ENVIRONMENT_PREFIX = '/Users/carl/Environments/osx/10.8'
+OSX_ENVIRONMENT_PREFIX = '/Users/carl/Environments/osx'
 
 
 import os
@@ -252,17 +252,21 @@ class RemoteEnvironment(Environment):
         self.host = host
         self.dir_on_host = DIR_ON_HOST
         self.host_mount_dir = tempfile.mkdtemp()
+        self.osx_sdk = '10.6'
 
         # Mount the remote host on host_mount_dir
         command('sshfs %s:%s %s' % (self.host, self.dir_on_host, self.host_mount_dir))
         for g in glob.glob('%s/*' % self.host_mount_dir):
             rmtree(g)
 
+        sysroot = '-isysroot %s' % (OSX_SDK_PREFIX, self.osx_sdk)
+        enviro = '%s/%s' % (OSX_ENVIRONMENT_PREFIX, self.osx_sdk)
+
         # Environment variables
-        self.set('CXXFLAGS', '"-I%s/include -I%s/include"' % (self.dir_on_host, OSX_ENVIRONMENT_PREFIX))
-        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib"' % (self.dir_on_host, OSX_ENVIRONMENT_PREFIX))
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig' % (self.dir_on_host, OSX_ENVIRONMENT_PREFIX))
-        self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % OSX_ENVIRONMENT_PREFIX)
+        self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (self.dir_on_host, enviro, sysroot))
+        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.dir_on_host, enviro, sysroot))
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig' % (self.dir_on_host, enviro))
+        self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
 
     def work_dir_cdist(self):
         return self.host_mount_dir
