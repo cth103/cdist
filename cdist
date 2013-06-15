@@ -269,6 +269,7 @@ class RemoteEnvironment(Environment):
         self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.dir_on_host, enviro, sysroot))
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig' % (self.dir_on_host, enviro))
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
+        self.set('MACOSX_DEPLOYMENT_TARGET', self.osx_sdk)
 
     def work_dir_cdist(self):
         return self.host_mount_dir
