@@ -28,6 +28,7 @@ OSX_BUILD_HOST = 'carl@192.168.1.202'
 OSX_DIR_IN_HOST = '/Users/carl/cdist'
 OSX_ENVIRONMENT_PREFIX = '/Users/carl/Environments/osx'
 OSX_SDK_PREFIX = '/Users/carl/SDK'
+OSX_SDK = '10.6'
 
 import os
 import sys
@@ -301,15 +302,14 @@ class OSXTarget(Target):
         super(OSXTarget, self).__init__('osx')
 
         self.host_mount_dir = tempfile.mkdtemp()
-        self.osx_sdk = '10.6'
 
         # Mount the remote host on host_mount_dir
         command('sshfs %s:%s %s' % (OSX_BUILD_HOST, OSX_DIR_IN_HOST, self.host_mount_dir))
         for g in glob.glob('%s/*' % self.host_mount_dir):
             rmtree(g)
 
-        flags = '-isysroot %s/MacOSX%s.sdk -arch i386 -arch x86_64' % (OSX_SDK_PREFIX, self.osx_sdk)
-        enviro = '%s/%s' % (OSX_ENVIRONMENT_PREFIX, self.osx_sdk)
+        flags = '-isysroot %s/MacOSX%s.sdk -arch i386 -arch x86_64' % (OSX_SDK_PREFIX, OSX_SDK)
+        enviro = '%s/%s' % (OSX_ENVIRONMENT_PREFIX, OSX_SDK)
 
         # Environment variables
         self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (OSX_DIR_IN_HOST, enviro, flags))
@@ -318,7 +318,7 @@ class OSXTarget(Target):
         self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (OSX_DIR_IN_HOST, enviro, flags))
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig' % (OSX_DIR_IN_HOST, enviro))
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
-        self.set('MACOSX_DEPLOYMENT_TARGET', self.osx_sdk)
+        self.set('MACOSX_DEPLOYMENT_TARGET', OSX_SDK)
 
     def work_dir_cdist(self):
         return self.host_mount_dir
