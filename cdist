@@ -20,16 +20,12 @@
 # Configuration
 #
 
-# Directory to build things in within chroots
-DIR_IN_CHROOT = '/home/carl'
-# Prefix of chroots in the filesystem
-CHROOT_PREFIX = '/home/carl/Environments'
-# Prefix of windows environments
+LINUX_DIR_IN_CHROOT = '/home/carl'
+LINUX_CHROOT_PREFIX = '/home/carl/Environments'
 WINDOWS_ENVIRONMENT_PREFIX = '/home/carl/Environments/windows'
-# Git prefix
-GIT_DIR = 'ssh://houllier/home/carl/git'
+GIT_PREFIX = 'ssh://houllier/home/carl/git'
 OSX_BUILD_HOST = 'carl@192.168.1.202'
-DIR_ON_HOST = '/Users/carl/cdist'
+OSX_DIR_IN_HOST = '/Users/carl/cdist'
 OSX_ENVIRONMENT_PREFIX = '/Users/carl/Environments/osx'
 OSX_SDK_PREFIX = '/Users/carl/SDK'
 
@@ -147,14 +143,32 @@ class Version:
 
         return s
 
-
 #
-# Environment
+# Targets
 #
 
-class Environment(object):
-    def __init__(self):
+class Target(object):
+    def __init__(self, platform):
+        self.platform = platform
+        # Environment variables that we will use when we call cscripts
         self.variables = {}
+        # Prefix to which builds should be installed by cscripts
+        self.install_prefix = '.'
+
+    def build_dependencies(self, project):
+        cwd = os.getcwd()
+        if 'dependencies' in project.cscript:
+            print project.cscript['dependencies'](self)
+            for d in project.cscript['dependencies'](self):
+                log('Building dependency %s %s of %s' % (d[0], d[1], project.name))
+                dep = Project(d[0], '.', d[1])
+                dep.checkout(self)
+                self.build_dependencies(dep)
+                self.build(dep)
+        os.chdir(cwd)
+
+    def build(self, project):
+        project.cscript['build'](self)
 
     def set(self, a, b):
         self.variables[a] = b
@@ -170,140 +184,51 @@ class Environment(object):
             e += '%s=%s ' % (k, v)
         return e
 
-    def work_dir_cdist(self, sub):
-        assert(false)
-
-    def work_dir_cscript(self):
-        assert(false)
-
-    def build_dependencies(self, target, project):
-        cwd = os.getcwd()
-        if 'dependencies' in project.cscript:
-            for d in project.cscript['dependencies'](target):
-                dep = Project(d[0], '.', d[1])
-                dep.checkout(self)
-                self.build(target, dep)
-        os.chdir(cwd)
-
-    def build(self, target, project):
-        project.cscript['build'](self, target)
-
-    def package(self, target, project):
-        project.checkout(self)
-        if target.platform != 'source':
-            self.build_dependencies(target, project)
-        if target.platform == 'source':
-            command('./waf dist')
-            if project.directory != '.':
-                return os.path.abspath('%s-%s.tar.bz2' % (project.directory, project.version))
-            return os.path.abspath('%s-%s.tar.bz2' % (project.name, project.version))
-        else:
-            project.cscript['build'](self, target)
-            return project.cscript['package'](self, target, project.version)
-
     def cleanup(self):
         pass
 
-#
-# ChrootEnvironment
-#
-
-class ChrootEnvironment(Environment):
-    def __init__(self, chroot):
-        super(ChrootEnvironment, self).__init__()
-        self.chroot = chroot
-        self.dir_in_chroot = DIR_IN_CHROOT
-        self.chroot_dir = CHROOT_PREFIX
-
-        # ChrootEnvironments work in dir_in_chroot, and clear
-        # it out before use
-        for g in glob.glob('%s/*' % self.work_dir_cdist()):
-            rmtree(g)
-
-        # Environment variables
-        self.set('CXXFLAGS', '-I%s/include' % self.work_dir_cscript())
-        self.set('LINKFLAGS', '-L%s/lib' % self.work_dir_cscript())
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
-
-    def work_dir_cdist(self):
-        return '%s/%s%s' % (self.chroot_dir, self.chroot, self.dir_in_chroot)
-
-    def work_dir_cscript(self):
-        return self.dir_in_chroot
-
-    def command(self, c):
-        # Work out the cwd for the chrooted command
-        cwd = os.getcwd()
-        prefix = '%s/%s' % (self.chroot_dir, self.chroot)
-        assert(cwd.startswith(prefix))
-        cwd = cwd[len(prefix):]
-
-        log('schroot [%s] -> %s' % (cwd, c))
-        command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
-
-
-#
-# RemoteEnvironment
+# 
+# Windows
 #
 
-class RemoteEnvironment(Environment):
-    def __init__(self, host):
-        super(RemoteEnvironment, self).__init__()
-        self.host = host
-        self.dir_on_host = DIR_ON_HOST
-        self.host_mount_dir = tempfile.mkdtemp()
-        self.osx_sdk = '10.6'
-
-        # Mount the remote host on host_mount_dir
-        command('sshfs %s:%s %s' % (self.host, self.dir_on_host, self.host_mount_dir))
-        for g in glob.glob('%s/*' % self.host_mount_dir):
-            rmtree(g)
-
-        flags = '-isysroot %s/MacOSX%s.sdk -arch i386 -arch x86_64' % (OSX_SDK_PREFIX, self.osx_sdk)
-        enviro = '%s/%s' % (OSX_ENVIRONMENT_PREFIX, self.osx_sdk)
-
-        # Environment variables
-        self.set('CCFLAGS', '"-I%s/include -I%s/include %s"' % (self.dir_on_host, enviro, flags))
-        self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (self.dir_on_host, enviro, flags))
-        self.set('LDFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.dir_on_host, enviro, flags))
-        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.dir_on_host, enviro, flags))
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig' % (self.dir_on_host, enviro))
-        self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
-        self.set('MACOSX_DEPLOYMENT_TARGET', self.osx_sdk)
-
-    def work_dir_cdist(self):
-        return self.host_mount_dir
-
-    def work_dir_cscript(self):
-        return self.dir_on_host
-
-    def command(self, c):
-        # Work out the cwd for the chrooted command
-        cwd = os.getcwd()
-        assert(cwd.startswith(self.host_mount_dir))
-        cwd = cwd[len(self.host_mount_dir):]
-
-        log('ssh [%s] -> %s' % (cwd, c))
-        command('ssh %s -- "cd %s%s; %s %s"' % (self.host, self.dir_on_host, cwd, self.variables_string(True), c))
-
-    def cleanup(self):
-        os.chdir('/')
-        command('fusermount -u %s' % self.host_mount_dir)
-        rmdir(self.host_mount_dir)
-
-#
-# HostEnvironment
-#
-
-class HostEnvironment(Environment):
-    def __init__(self, directory=None):
-        super(HostEnvironment, self).__init__()
+class WindowsTarget(Target):
+    def __init__(self, bits, directory = None):
+        super(WindowsTarget, self).__init__('windows')
+        self.bits = bits
         if directory is None:
             self.directory = tempfile.mkdtemp()
             self.rmdir = True
         else:
             self.directory = directory
             self.rmdir = False
+        
+        self.windows_prefix = '%s/%d' % (WINDOWS_ENVIRONMENT_PREFIX, self.bits)
+        if not os.path.exists(self.windows_prefix):
+            error('windows prefix %s does not exist' % target.windows_prefix)
+            
+        if self.bits == 32:
+            mingw_name = 'i686'
+        else:
+            mingw_name = 'x86_64'
+
+        mingw_path = '/mingw/%d/bin' % self.bits
+        mingw_prefixes = ['/mingw/%d' % self.bits, '/mingw/%d/%s-w64-mingw32' % (bits, mingw_name)]
+
+        self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.windows_prefix)
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
+        self.set('PATH', '%s/bin:%s:%s' % (self.windows_prefix, mingw_path, os.environ['PATH']))
+        self.set('CC', '%s-w64-mingw32-gcc' % mingw_name)
+        self.set('CXX', '%s-w64-mingw32-g++' % mingw_name)
+        self.set('LD', '%s-w64-mingw32-ld' % mingw_name)
+        self.set('RANLIB', '%s-w64-mingw32-ranlib' % mingw_name)
+        self.set('WINRC', '%s-w64-mingw32-windres' % mingw_name)
+        cxx = '-I%s/include -I%s/include' % (self.windows_prefix, self.work_dir_cscript())
+        link = '-L%s/lib -L%s/lib' % (self.windows_prefix, self.work_dir_cscript())
+        for p in mingw_prefixes:
+            cxx += ' -I%s/include' % p
+            link += ' -L%s/lib' % p
+        self.set('CXXFLAGS', '"%s"' % cxx)
+        self.set('LINKFLAGS', '"%s"' % link)
 
     def work_dir_cdist(self):
         return self.directory
@@ -319,70 +244,162 @@ class HostEnvironment(Environment):
         if self.rmdir:
             rmtree(self.directory)
 
+    def package(self, project):
+        project.checkout(self)
+        self.build_dependencies(project)
+        project.cscript['build'](self)
+        return project.cscript['package'](self, project.version)
 
-def prepare_for_windows(env, bits):
-    env.windows_prefix = '%s/%d' % (WINDOWS_ENVIRONMENT_PREFIX, bits)
-    if not os.path.exists(env.windows_prefix):
-        error('windows prefix %s does not exist' % env.windows_prefix)
+#
+# Linux
+#
 
-    if bits == 32:
-        mingw_name = 'i686'
-    else:
-        mingw_name = 'x86_64'
+class LinuxTarget(Target):
+    def __init__(self, distro, version, bits):
+        super(LinuxTarget, self).__init__('linux')
+        self.distro = distro
+        self.version = version
+        self.bits = bits
+        self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
 
-    mingw_path = '/mingw/%d/bin' % bits
-    mingw_prefixes = ['/mingw/%d' % bits, '/mingw/%d/%s-w64-mingw32' % (bits, mingw_name)]
+        for g in glob.glob('%s/*' % self.work_dir_cdist()):
+            rmtree(g)
 
-    env.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % env.windows_prefix)
-    env.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % env.work_dir_cscript())
-    env.set('PATH', '%s/bin:%s:%s' % (env.windows_prefix, mingw_path, os.environ['PATH']))
-    env.set('CC', '%s-w64-mingw32-gcc' % mingw_name)
-    env.set('CXX', '%s-w64-mingw32-g++' % mingw_name)
-    env.set('LD', '%s-w64-mingw32-ld' % mingw_name)
-    env.set('RANLIB', '%s-w64-mingw32-ranlib' % mingw_name)
-    env.set('WINRC', '%s-w64-mingw32-windres' % mingw_name)
-    cxx = '-I%s/include -I%s/include' % (env.windows_prefix, env.work_dir_cscript())
-    link = '-L%s/lib -L%s/lib' % (env.windows_prefix, env.work_dir_cscript())
-    for p in mingw_prefixes:
-        cxx += ' -I%s/include' % p
-        link += ' -L%s/lib' % p
-    env.set('CXXFLAGS', '"%s"' % cxx)
-    env.set('LINKFLAGS', '"%s"' % link)
+        self.set('CXXFLAGS', '-I%s/include' % self.work_dir_cscript())
+        self.set('LINKFLAGS', '-L%s/lib' % self.work_dir_cscript())
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
+
+    def work_dir_cdist(self):
+        return '%s/%s%s' % (LINUX_CHROOT_PREFIX, self.chroot, LINUX_DIR_IN_CHROOT)
+
+    def work_dir_cscript(self):
+        return LINUX_DIR_IN_CHROOT
+
+    def command(self, c):
+        # Work out the cwd for the chrooted command
+        cwd = os.getcwd()
+        prefix = '%s/%s' % (LINUX_CHROOT_PREFIX, self.chroot)
+        assert(cwd.startswith(prefix))
+        cwd = cwd[len(prefix):]
+
+        log('schroot [%s] -> %s' % (cwd, c))
+        command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
+
+    def package(self, target):
+        project.checkout(self)
+        self.build_dependencies(project)
+        project.cscript['build'](self)
+        return project.cscript['package'](self, project.version)
 
 
 #
-# Target
+# OS X
 #
 
-class Target:
-    def __init__(self, name):
-        self.name = name
-        if name.startswith('ubuntu-') or name.startswith('debian-'):
-            self.platform = 'linux'
-            self.version = name.split('-')[1]
-            self.bits = int(name.split('-')[2])
-        elif name.startswith('windows-'):
-            self.platform = 'windows'
-            self.bits = int(name.split('-')[1])
-        elif name == 'osx':
-            self.platform = 'osx'
-        elif name == 'source':
-            self.platform = 'source'
+class OSXTarget(Target):
+    def __init__(self):
+        super(OSXTarget, self).__init__('osx')
 
-def environment_for_target(target, directory):
-    if target.platform == 'linux':
-        return ChrootEnvironment(target.name)
-    elif target.platform == 'windows':
-        env = HostEnvironment(directory)
-        prepare_for_windows(env, target.bits)
-        return env
-    elif target.platform == 'osx':
-        env = RemoteEnvironment(OSX_BUILD_HOST)
-        return env
-    elif target.platform == 'source':
-        return HostEnvironment()
+        self.host_mount_dir = tempfile.mkdtemp()
+        self.osx_sdk = '10.6'
+
+        # Mount the remote host on host_mount_dir
+        command('sshfs %s:%s %s' % (OSX_BUILD_HOST, OSX_DIR_IN_HOST, self.host_mount_dir))
+        for g in glob.glob('%s/*' % self.host_mount_dir):
+            rmtree(g)
+
+        flags = '-isysroot %s/MacOSX%s.sdk -arch i386 -arch x86_64' % (OSX_SDK_PREFIX, self.osx_sdk)
+        enviro = '%s/%s' % (OSX_ENVIRONMENT_PREFIX, self.osx_sdk)
+
+        # Environment variables
+        self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (OSX_DIR_IN_HOST, enviro, flags))
+        self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (OSX_DIR_IN_HOST, enviro, flags))
+        self.set('LDFLAGS', '"-L%s/lib -L%s/lib %s"' % (OSX_DIR_IN_HOST, enviro, flags))
+        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (OSX_DIR_IN_HOST, enviro, flags))
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig' % (OSX_DIR_IN_HOST, enviro))
+        self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
+        self.set('MACOSX_DEPLOYMENT_TARGET', self.osx_sdk)
+
+    def work_dir_cdist(self):
+        return self.host_mount_dir
+
+    def work_dir_cscript(self):
+        return OSX_DIR_IN_HOST
+
+    def package(self, project):
+        project.checkout(self)
+        self.build_dependencies(target, project)
+        # We have to build 32- and 64-bit versions
+        # and then stick them together to make a universal binary
+        target.bits = 32
+        self.install_prefix = '32'
+        project.cscript['build'](self, target)
+        target.bits = 64
+        self.install_prefix = '64'
+        project.cscript['build'](self, target)
+
+    def command(self, c):
+        # Work out the cwd for the chrooted command
+        cwd = os.getcwd()
+        assert(cwd.startswith(self.host_mount_dir))
+        cwd = cwd[len(self.host_mount_dir):]
+
+        log('ssh [%s] -> %s' % (cwd, c))
+        command('ssh %s -- "cd %s%s; %s %s"' % (OSX_BUILD_HOST, OSX_DIR_IN_HOST, cwd, self.variables_string(True), c))
+
+    def cleanup(self):
+        os.chdir('/')
+        command('fusermount -u %s' % self.host_mount_dir)
+        rmdir(self.host_mount_dir)
+
+#
+# Source
+#
+
+class SourceTarget(Target):
+    def __init__(self):
+        super(SourceTarget, self).__init__('source')
+        self.directory = tempfile.mkdtemp()
+
+    def work_dir_cdist(self):
+        return self.directory
+
+    def work_dir_cscript(self):
+        return self.directory
+
+    def command(self, c):
+        log('host -> %s' % c)
+        command('%s %s' % (self.variables_string(), c))
+
+    def cleanup(self):
+        rmtree(self.directory)
+
+    def package(self, project):
+        command('./waf dist')
+        if project.directory != '.':
+            return os.path.abspath('%s-%s.tar.bz2' % (project.directory, project.version))
+        return os.path.abspath('%s-%s.tar.bz2' % (project.name, project.version))
+
+
+# @param s Target string:
+#       windows-{32,64}
+#    or ubuntu-version-{32,64}
+#    or debian-version-{32,64}
+#    or osx
+#    or source      
+def target_factory(s):
+    if s.startswith('windows-'):
+        return WindowsTarget(int(s.split('-')[1]))
+    elif s.startswith('ubuntu-') or s.startswith('debian-'):
+        p = s.split('-')
+        return LinuxTarget(p[0], p[1], int(p[2]))
+    elif s == 'osx':
+        return OSXTarget()
+    elif s == 'source':
+        return SourceTarget()
 
     return None
+
 
 #
 # Project
@@ -392,26 +409,25 @@ class Project(object):
     def __init__(self, name, directory, specifier=None):
         self.name = name
         self.directory = directory
-        self.git_dir = GIT_DIR
         self.version = None
         self.specifier = specifier
         if self.specifier is None:
             self.specifier = 'master'
 
-    def checkout(self, env):
+    def checkout(self, target):
         flags = ''
         redirect = ''
         if args.quiet:
             flags = '-q'
             redirect = '>/dev/null'
-        command('git clone --depth 0 %s %s/%s.git %s/src/%s' % (flags, self.git_dir, self.name, env.work_dir_cdist(), self.name))
-        os.chdir('%s/src/%s' % (env.work_dir_cdist(), self.name))
+        command('git clone --depth 0 %s %s/%s.git %s/src/%s' % (flags, GIT_PREFIX, self.name, target.work_dir_cdist(), self.name))
+        os.chdir('%s/src/%s' % (target.work_dir_cdist(), self.name))
         command('git checkout %s %s %s' % (flags, self.specifier, redirect))
         command('git submodule init')
         command('git submodule update')
         os.chdir(self.directory)
 
-        proj = '%s/src/%s/%s' % (env.work_dir_cdist(), self.name, self.directory)
+        proj = '%s/src/%s/%s' % (target.work_dir_cdist(), self.name, self.directory)
 
         self.read_cscript('%s/cscript' % proj)
         
@@ -502,22 +518,19 @@ if args.command == 'build':
     if args.target is None:
         error('you must specify -t or --target')
 
-    target = Target(args.target)
-    env = environment_for_target(target, None)
-    project.checkout(env)
-    env.build_dependencies(target, project)
-    env.build(target, project)
-
-    env.cleanup()
+    target = target_factory(args.target)
+    project.checkout(target)
+    target.build_dependencies(project)
+    target.build(project)
+    target.cleanup()
 
 elif args.command == 'package':
     if args.target is None:
         error('you must specify -t or --target')
         
-    target = Target(args.target)
-    env = environment_for_target(target, None)
+    target = target_factory(args.target)
 
-    packages = env.package(target, project)
+    packages = target.package(project)
     if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
         packages = [packages]
 
@@ -533,14 +546,14 @@ elif args.command == 'package':
         for p in packages:
             copyfile(p, '%s/%s' % (args.output, os.path.basename(p)))
 
-    env.cleanup()
+    target.cleanup()
 
 elif args.command == 'release':
     if args.full is False and args.beta is False:
         error('you must specify --full or --beta')
 
-    env = HostEnvironment()
-    project.checkout(env)
+    target = SourceTarget()
+    project.checkout(target)
 
     version = project.version
     if args.full:
@@ -563,21 +576,21 @@ elif args.command == 'release':
     command('git push')
     command('git push --tags')
 
-    env.cleanup()
+    target.cleanup()
 
 elif args.command == 'pot':
-    env = HostEnvironment()
-    project.checkout(env)
+    target = SourceTarget()
+    project.checkout(target)
 
-    pots = project.cscript['make_pot'](env)
+    pots = project.cscript['make_pot'](target)
     for p in pots:
         copyfile(p, '%s/%s' % (args.output, os.path.basename(p)))
 
-    env.cleanup()
+    target.cleanup()
 
 elif args.command == 'changelog':
-    env = HostEnvironment()
-    project.checkout(env)
+    target = SourceTarget()
+    project.checkout(target)
 
     text = open('ChangeLog', 'r')
     html = open('%s/changelog.html' % args.output, 'w')
@@ -614,34 +627,34 @@ elif args.command == 'changelog':
                     else:
                         changes[-1] += " " + c
 
-    env.cleanup()
+    target.cleanup()
 
 elif args.command == 'manual':
-    env = HostEnvironment()
-    project.checkout(env)
+    target = SourceTarget()
+    project.checkout(target)
 
-    dirs = project.cscript['make_manual'](env)
+    dirs = project.cscript['make_manual'](target)
     for d in dirs:
         copytree(d, '%s/%s' % (args.output, os.path.basename(d)))
 
-    env.cleanup()
+    target.cleanup()
 
 elif args.command == 'doxygen':
-    env = HostEnvironment()
-    project.checkout(env)
+    target = SourceTarget()
+    project.checkout(target)
 
-    dirs = project.cscript['make_doxygen'](env)
+    dirs = project.cscript['make_doxygen'](target)
     if hasattr(dirs, 'strip') or (not hasattr(dirs, '__getitem__') and not hasattr(dirs, '__iter__')):
         dirs = [dirs]
 
     for d in dirs:
         copytree(d, '%s/%s' % (args.output, 'doc'))
 
-    env.cleanup()
+    target.cleanup()
 
 elif args.command == 'latest':
-    env = HostEnvironment()
-    project.checkout(env)
+    target = SourceTarget()
+    project.checkout(target)
 
     f = command_and_read('git log --tags --simplify-by-decoration --pretty="%d"')
     t = f.readline()
@@ -654,16 +667,15 @@ elif args.command == 'latest':
                 latest = t[1:]
 
     print latest
-    env.cleanup()
+    target.cleanup()
 
 elif args.command == 'test':
     if args.target is None:
         error('you must specify -t or --target')
 
     target = Target(args.target)
-    env = environment_for_target(target, '.')
     project.read_cscript('cscript')
-    env.build(target, project)
+    target.build(project)
 
 else:
     error('invalid command %s' % args.command)
