@@ -149,12 +149,11 @@ class Version:
 #
 
 class Target(object):
-    def __init__(self, platform):
+    def __init__(self, platform, parallel):
         self.platform = platform
+        self.parallel = parallel
         # Environment variables that we will use when we call cscripts
         self.variables = {}
-        # Prefix to which builds should be installed by cscripts
-        self.install_prefix = '.'
 
     def build_dependencies(self, project):
         cwd = os.getcwd()
@@ -170,6 +169,12 @@ class Target(object):
 
     def build(self, project):
         project.cscript['build'](self)
+
+    def package(self, project):
+        project.checkout(self)
+        self.build_dependencies(project)
+        project.cscript['build'](self)
+        return project.cscript['package'](self, project.version)
 
     def set(self, a, b):
         self.variables[a] = b
@@ -194,7 +199,7 @@ class Target(object):
 
 class WindowsTarget(Target):
     def __init__(self, bits, directory = None):
-        super(WindowsTarget, self).__init__('windows')
+        super(WindowsTarget, self).__init__('windows', 2)
         self.bits = bits
         if directory is None:
             self.directory = tempfile.mkdtemp()
@@ -232,10 +237,10 @@ class WindowsTarget(Target):
         self.set('LINKFLAGS', '"%s"' % link)
 
     def work_dir_cdist(self):
-        return self.directory
+        return '%s/%d' % (self.directory, self.bits)
 
     def work_dir_cscript(self):
-        return self.directory
+        return '%s/%d' % (self.directory, self.bits)
 
     def command(self, c):
         log('host -> %s' % c)
@@ -245,19 +250,13 @@ class WindowsTarget(Target):
         if self.rmdir:
             rmtree(self.directory)
 
-    def package(self, project):
-        project.checkout(self)
-        self.build_dependencies(project)
-        project.cscript['build'](self)
-        return project.cscript['package'](self, project.version)
-
 #
 # Linux
 #
 
 class LinuxTarget(Target):
     def __init__(self, distro, version, bits):
-        super(LinuxTarget, self).__init__('linux')
+        super(LinuxTarget, self).__init__('linux', 2)
         self.distro = distro
         self.version = version
         self.bits = bits
@@ -286,20 +285,13 @@ class LinuxTarget(Target):
         log('schroot [%s] -> %s' % (cwd, c))
         command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
 
-    def package(self, target):
-        project.checkout(self)
-        self.build_dependencies(project)
-        project.cscript['build'](self)
-        return project.cscript['package'](self, project.version)
-
-
 #
 # OS X
 #
 
 class OSXTarget(Target):
     def __init__(self):
-        super(OSXTarget, self).__init__('osx')
+        super(OSXTarget, self).__init__('osx', 4)
 
         self.host_mount_dir = tempfile.mkdtemp()
 
@@ -308,49 +300,77 @@ class OSXTarget(Target):
         for g in glob.glob('%s/*' % self.host_mount_dir):
             rmtree(g)
 
-        flags = '-isysroot %s/MacOSX%s.sdk -arch i386 -arch x86_64' % (OSX_SDK_PREFIX, OSX_SDK)
-        enviro = '%s/%s' % (OSX_ENVIRONMENT_PREFIX, OSX_SDK)
-
-        # Environment variables
-        self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (OSX_DIR_IN_HOST, enviro, flags))
-        self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (OSX_DIR_IN_HOST, enviro, flags))
-        self.set('LDFLAGS', '"-L%s/lib -L%s/lib %s"' % (OSX_DIR_IN_HOST, enviro, flags))
-        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (OSX_DIR_IN_HOST, enviro, flags))
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig' % (OSX_DIR_IN_HOST, enviro))
-        self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
-        self.set('MACOSX_DEPLOYMENT_TARGET', OSX_SDK)
-
-    def work_dir_cdist(self):
-        return self.host_mount_dir
-
-    def work_dir_cscript(self):
-        return OSX_DIR_IN_HOST
-
-    def package(self, project):
-        project.checkout(self)
-        self.build_dependencies(target, project)
-        # We have to build 32- and 64-bit versions
-        # and then stick them together to make a universal binary
-        target.bits = 32
-        self.install_prefix = '32'
-        project.cscript['build'](self, target)
-        target.bits = 64
-        self.install_prefix = '64'
-        project.cscript['build'](self, target)
-
     def command(self, c):
         # Work out the cwd for the chrooted command
         cwd = os.getcwd()
+        print cwd
+        print self.host_mount_dir
         assert(cwd.startswith(self.host_mount_dir))
         cwd = cwd[len(self.host_mount_dir):]
 
         log('ssh [%s] -> %s' % (cwd, c))
         command('ssh %s -- "cd %s%s; %s %s"' % (OSX_BUILD_HOST, OSX_DIR_IN_HOST, cwd, self.variables_string(True), c))
 
+
+class OSXSingleTarget(OSXTarget):
+    def __init__(self, bits):
+        super(OSXSingleTarget, self).__init__()
+        self.bits = bits
+
+        if bits == 32:
+            arch = 'i386'
+        else:
+            arch = 'x86_64'
+
+        flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (OSX_SDK_PREFIX, OSX_SDK, arch)
+        enviro = '%s/%d' % (OSX_ENVIRONMENT_PREFIX, bits)
+
+        # Environment variables
+        self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (self.work_dir_cscript(), enviro, flags))
+        self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (self.work_dir_cscript(), enviro, flags))
+        self.set('LDFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.work_dir_cscript(), enviro, flags))
+        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.work_dir_cscript(), enviro, flags))
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig:/usr/lib/pkgconfig' % (self.work_dir_cscript(), enviro))
+        self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
+        self.set('MACOSX_DEPLOYMENT_TARGET', OSX_SDK)
+
+    def work_dir_cdist(self):
+        return '%s/%d' % (self.host_mount_dir, self.bits)
+
+    def work_dir_cscript(self):
+        return '%s/%d' % (OSX_DIR_IN_HOST, self.bits)
+
+    def package(self, project):
+        error('cannot package non-universal OS X versions')
+
     def cleanup(self):
         os.chdir('/')
         command('fusermount -u %s' % self.host_mount_dir)
         rmdir(self.host_mount_dir)
+
+
+class OSXUniversalTarget(OSXTarget):
+    def __init__(self):
+        super(OSXUniversalTarget, self).__init__()
+        self.parts = []
+        self.parts.append(OSXSingleTarget(32))
+        self.parts.append(OSXSingleTarget(64))
+
+    def work_dir_cdist(self):
+        return '%s/universal' % self.host_mount_dir
+
+    def work_dir_cscript(self):
+        return '%s/universal' % OSX_DIR_IN_HOST
+
+    def package(self, project):
+        for p in self.parts:
+            project.checkout(p)
+            p.build_dependencies(project)
+            p.build(project)
+
+        project.checkout(self)
+        return project.cscript['package'](self, project.version)
+    
 
 #
 # Source
@@ -358,7 +378,7 @@ class OSXTarget(Target):
 
 class SourceTarget(Target):
     def __init__(self):
-        super(SourceTarget, self).__init__('source')
+        super(SourceTarget, self).__init__('source', 2)
         self.directory = tempfile.mkdtemp()
 
     def work_dir_cdist(self):
@@ -385,7 +405,7 @@ class SourceTarget(Target):
 #       windows-{32,64}
 #    or ubuntu-version-{32,64}
 #    or debian-version-{32,64}
-#    or osx
+#    or osx-{32,64}
 #    or source      
 def target_factory(s):
     if s.startswith('windows-'):
@@ -393,8 +413,10 @@ def target_factory(s):
     elif s.startswith('ubuntu-') or s.startswith('debian-'):
         p = s.split('-')
         return LinuxTarget(p[0], p[1], int(p[2]))
+    elif s.startswith('osx-'):
+        return OSXSingleTarget(int(s.split('-')[1]))
     elif s == 'osx':
-        return OSXTarget()
+        return OSXUniversalTarget()
     elif s == 'source':
         return SourceTarget()
 
