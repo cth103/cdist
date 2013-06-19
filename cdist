@@ -395,6 +395,7 @@ class SourceTarget(Target):
         rmtree(self.directory)
 
     def package(self, project):
+        project.checkout(self)
         command('./waf dist')
         if project.directory != '.':
             return os.path.abspath('%s-%s.tar.bz2' % (project.directory, project.version))
