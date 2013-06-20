@@ -356,20 +356,13 @@ class OSXUniversalTarget(OSXTarget):
         self.parts.append(OSXSingleTarget(32))
         self.parts.append(OSXSingleTarget(64))
 
-    def work_dir_cdist(self):
-        return '%s/universal' % self.host_mount_dir
-
-    def work_dir_cscript(self):
-        return '%s/universal' % OSX_DIR_IN_HOST
-
     def package(self, project):
         for p in self.parts:
             project.checkout(p)
             p.build_dependencies(project)
             p.build(project)
 
-        project.checkout(self)
-        return project.cscript['package'](self, project.version)
+        return project.cscript['package'](self.parts[-1], project.version)
     
 
 #
