@@ -689,7 +689,7 @@ elif args.command == 'test':
     if args.target is None:
         error('you must specify -t or --target')
 
-    target = Target(args.target)
+    target = target_factory(args.target)
     project.read_cscript('cscript')
     target.build(project)
 
