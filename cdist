@@ -410,7 +410,10 @@ def target_factory(s):
     elif s.startswith('osx-'):
         return OSXSingleTarget(int(s.split('-')[1]))
     elif s == 'osx':
-        return OSXUniversalTarget()
+        if args.command == 'build':
+            return OSXSingleTarget(64)
+        else:
+            return OSXUniversalTarget()
     elif s == 'source':
         return SourceTarget()
 
