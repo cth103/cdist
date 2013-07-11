@@ -154,6 +154,7 @@ class Target(object):
         self.parallel = parallel
         # Environment variables that we will use when we call cscripts
         self.variables = {}
+        self.debug = False
 
     def build_dependencies(self, project):
         cwd = os.getcwd()
@@ -311,6 +312,12 @@ class OSXTarget(Target):
         log('ssh [%s] -> %s' % (cwd, c))
         command('ssh %s -- "cd %s%s; %s %s"' % (OSX_BUILD_HOST, OSX_DIR_IN_HOST, cwd, self.variables_string(True), c))
 
+    def cleanup(self):
+        os.chdir('/')
+        command('fusermount -u %s' % self.host_mount_dir)
+        rmdir(self.host_mount_dir)
+
+
 
 class OSXSingleTarget(OSXTarget):
     def __init__(self, bits):
@@ -342,11 +349,6 @@ class OSXSingleTarget(OSXTarget):
 
     def package(self, project):
         error('cannot package non-universal OS X versions')
-
-    def cleanup(self):
-        os.chdir('/')
-        command('fusermount -u %s' % self.host_mount_dir)
-        rmdir(self.host_mount_dir)
 
 
 class OSXUniversalTarget(OSXTarget):
@@ -401,23 +403,28 @@ class SourceTarget(Target):
 #    or debian-version-{32,64}
 #    or osx-{32,64}
 #    or source      
-def target_factory(s):
+# @param debug True to build with debugging symbols (where possible)
+def target_factory(s, debug=False):
+    target = None
     if s.startswith('windows-'):
-        return WindowsTarget(int(s.split('-')[1]))
+        target = WindowsTarget(int(s.split('-')[1]))
     elif s.startswith('ubuntu-') or s.startswith('debian-'):
         p = s.split('-')
-        return LinuxTarget(p[0], p[1], int(p[2]))
+        target = LinuxTarget(p[0], p[1], int(p[2]))
     elif s.startswith('osx-'):
-        return OSXSingleTarget(int(s.split('-')[1]))
+        target = OSXSingleTarget(int(s.split('-')[1]))
     elif s == 'osx':
         if args.command == 'build':
-            return OSXSingleTarget(64)
+            target = OSXSingleTarget(64)
         else:
-            return OSXUniversalTarget()
+            target = OSXUniversalTarget()
     elif s == 'source':
-        return SourceTarget()
+        target = SourceTarget()
 
-    return None
+    if target is not None:
+        target.debug = debug
+
+    return target
 
 
 #
@@ -524,6 +531,7 @@ parser.add_argument('-o', '--output', help='output directory', default='.')
 parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
 parser.add_argument('-t', '--target', help='target')
 parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
+parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
 args = parser.parse_args()
 
 args.output = os.path.abspath(args.output)
@@ -537,7 +545,7 @@ if args.command == 'build':
     if args.target is None:
         error('you must specify -t or --target')
 
-    target = target_factory(args.target)
+    target = target_factory(args.target, args.debug)
     project.checkout(target)
     target.build_dependencies(project)
     target.build(project)
