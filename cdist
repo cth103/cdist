@@ -269,6 +269,7 @@ class LinuxTarget(Target):
         self.set('CXXFLAGS', '-I%s/include' % self.work_dir_cscript())
         self.set('LINKFLAGS', '-L%s/lib' % self.work_dir_cscript())
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
+        self.set('PATH', '%s:/usr/local/bin' % (os.environ['PATH']))
 
     def work_dir_cdist(self):
         return '%s/%s%s' % (LINUX_CHROOT_PREFIX, self.chroot, LINUX_DIR_IN_CHROOT)
