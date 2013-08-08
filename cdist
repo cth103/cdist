@@ -16,20 +16,6 @@
 #    along with this program; if not, write to the Free Software
 #    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-#
-# Configuration
-#
-
-LINUX_DIR_IN_CHROOT = '/home/carl'
-LINUX_CHROOT_PREFIX = '/home/carl/Environments'
-WINDOWS_ENVIRONMENT_PREFIX = '/home/carl/Environments/windows'
-GIT_PREFIX = 'ssh://houllier/home/carl/git'
-OSX_BUILD_HOST = 'carl@192.168.1.202'
-OSX_DIR_IN_HOST = '/Users/carl/cdist'
-OSX_ENVIRONMENT_PREFIX = '/Users/carl/Environments/osx'
-OSX_SDK_PREFIX = '/Users/carl/SDK'
-OSX_SDK = '10.6'
-
 import os
 import sys
 import shutil
@@ -39,6 +25,54 @@ import argparse
 import datetime
 import subprocess
 import re
+
+#
+# Configuration
+#
+
+print 
+
+class Config:
+    def __init__(self):
+        self.keys = ['linux_dir_in_chroot',
+                     'linux_chroot_prefix',
+                     'windows_environment_prefix',
+                     'git_prefix',
+                     'osx_build_host',
+                     'osx_dir_in_host',
+                     'osx_environment_prefix',
+                     'osx_sdk_prefix',
+                     'osx_sdk']
+
+        self.dict = dict()
+
+        try:
+            f = open('%s/.config/cdist' % os.path.expanduser('~'), 'r')
+            while 1:
+                l = f.readline()
+                if l == '':
+                    break
+
+                if len(l) > 0 and l[0] == '#':
+                    continue
+
+                s = l.strip().split()
+                if len(s) == 2:
+                    for k in self.keys:
+                        if k == s[0]:
+                            self.dict[k] = s[1]
+        except:
+#            pass
+            raise
+
+    def get(self, k):
+        if k in self.dict:
+            return self.dict[k]
+
+        print >>sys.stderr,'Required setting %s not found' % k
+        sys.exit(1)
+
+config = Config()
 
 #
 # Utility bits
@@ -209,7 +243,7 @@ class WindowsTarget(Target):
             self.directory = directory
             self.rmdir = False
         
-        self.windows_prefix = '%s/%d' % (WINDOWS_ENVIRONMENT_PREFIX, self.bits)
+        self.windows_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
         if not os.path.exists(self.windows_prefix):
             error('windows prefix %s does not exist' % target.windows_prefix)
             
@@ -272,15 +306,15 @@ class LinuxTarget(Target):
         self.set('PATH', '%s:/usr/local/bin' % (os.environ['PATH']))
 
     def work_dir_cdist(self):
-        return '%s/%s%s' % (LINUX_CHROOT_PREFIX, self.chroot, LINUX_DIR_IN_CHROOT)
+        return '%s/%s%s' % (config.get('linux_chroot_prefix'), self.chroot, config.get('linux_dir_in_chroot'))
 
     def work_dir_cscript(self):
-        return LINUX_DIR_IN_CHROOT
+        return config.get('linux_dir_in_chroot')
 
     def command(self, c):
         # Work out the cwd for the chrooted command
         cwd = os.getcwd()
-        prefix = '%s/%s' % (LINUX_CHROOT_PREFIX, self.chroot)
+        prefix = '%s/%s' % (config.get('linux_chroot_prefix'), self.chroot)
         assert(cwd.startswith(prefix))
         cwd = cwd[len(prefix):]
 
@@ -298,7 +332,7 @@ class OSXTarget(Target):
         self.host_mount_dir = tempfile.mkdtemp()
 
         # Mount the remote host on host_mount_dir
-        command('sshfs %s:%s %s' % (OSX_BUILD_HOST, OSX_DIR_IN_HOST, self.host_mount_dir))
+        command('sshfs %s:%s %s' % (config.get('osx_build_host'), config.get('osx_dir_in_host'), self.host_mount_dir))
         for g in glob.glob('%s/*' % self.host_mount_dir):
             rmtree(g)
 
@@ -311,7 +345,7 @@ class OSXTarget(Target):
         cwd = cwd[len(self.host_mount_dir):]
 
         log('ssh [%s] -> %s' % (cwd, c))
-        command('ssh %s -- "cd %s%s; %s %s"' % (OSX_BUILD_HOST, OSX_DIR_IN_HOST, cwd, self.variables_string(True), c))
+        command('ssh %s -- "cd %s%s; %s %s"' % (config.get('osx_build_host'), config.get('osx_dir_in_host'), cwd, self.variables_string(True), c))
 
     def cleanup(self):
         os.chdir('/')
@@ -330,8 +364,8 @@ class OSXSingleTarget(OSXTarget):
         else:
             arch = 'x86_64'
 
-        flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (OSX_SDK_PREFIX, OSX_SDK, arch)
-        enviro = '%s/%d' % (OSX_ENVIRONMENT_PREFIX, bits)
+        flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (config.get('osx_sdk_prefix'), config.get('osx_sdk'), arch)
+        enviro = '%s/%d' % (config.get('osx_environment_prefix'), bits)
 
         # Environment variables
         self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (self.work_dir_cscript(), enviro, flags))
@@ -340,13 +374,13 @@ class OSXSingleTarget(OSXTarget):
         self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.work_dir_cscript(), enviro, flags))
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig:/usr/lib/pkgconfig' % (self.work_dir_cscript(), enviro))
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
-        self.set('MACOSX_DEPLOYMENT_TARGET', OSX_SDK)
+        self.set('MACOSX_DEPLOYMENT_TARGET', config.get('osx_sdk'))
 
     def work_dir_cdist(self):
         return '%s/%d' % (self.host_mount_dir, self.bits)
 
     def work_dir_cscript(self):
-        return '%s/%d' % (OSX_DIR_IN_HOST, self.bits)
+        return '%s/%d' % (config.get('osx_dir_in_host'), self.bits)
 
     def package(self, project):
         error('cannot package non-universal OS X versions')
@@ -447,7 +481,7 @@ class Project(object):
         if args.quiet:
             flags = '-q'
             redirect = '>/dev/null'
-        command('git clone --depth 0 %s %s/%s.git %s/src/%s' % (flags, GIT_PREFIX, self.name, target.work_dir_cdist(), self.name))
+        command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.work_dir_cdist(), self.name))
         os.chdir('%s/src/%s' % (target.work_dir_cdist(), self.name))
         command('git checkout %s %s %s' % (flags, self.specifier, redirect))
         command('git submodule init')
