@@ -329,29 +329,11 @@ class OSXTarget(Target):
     def __init__(self):
         super(OSXTarget, self).__init__('osx', 4)
 
-        self.host_mount_dir = tempfile.mkdtemp()
-
-        # Mount the remote host on host_mount_dir
-        command('sshfs %s:%s %s' % (config.get('osx_build_host'), config.get('osx_dir_in_host'), self.host_mount_dir))
-        for g in glob.glob('%s/*' % self.host_mount_dir):
+        for g in glob.glob('%s/*' % config.get('osx_dir_in_host')):
             rmtree(g)
 
     def command(self, c):
-        # Work out the cwd for the chrooted command
-        cwd = os.getcwd()
-        print cwd
-        print self.host_mount_dir
-        assert(cwd.startswith(self.host_mount_dir))
-        cwd = cwd[len(self.host_mount_dir):]
-
-        log('ssh [%s] -> %s' % (cwd, c))
-        command('ssh %s -- "cd %s%s; %s %s"' % (config.get('osx_build_host'), config.get('osx_dir_in_host'), cwd, self.variables_string(True), c))
-
-    def cleanup(self):
-        os.chdir('/')
-        command('fusermount -u %s' % self.host_mount_dir)
-        rmdir(self.host_mount_dir)
-
+        command('%s %s' % (self.variables_string(False), c))
 
 
 class OSXSingleTarget(OSXTarget):
@@ -377,7 +359,7 @@ class OSXSingleTarget(OSXTarget):
         self.set('MACOSX_DEPLOYMENT_TARGET', config.get('osx_sdk'))
 
     def work_dir_cdist(self):
-        return '%s/%d' % (self.host_mount_dir, self.bits)
+        return self.work_dir_cscript()
 
     def work_dir_cscript(self):
         return '%s/%d' % (config.get('osx_dir_in_host'), self.bits)
