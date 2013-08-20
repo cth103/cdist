@@ -231,7 +231,8 @@ class Target(object):
 #
 
 class WindowsTarget(Target):
-    def __init__(self, bits, directory = None):
+    # @param directory directory to work in; if None, we will use a temporary directory
+    def __init__(self, bits, directory=None):
         super(WindowsTarget, self).__init__('windows', 2)
         self.bits = bits
         if directory is None:
@@ -288,12 +289,17 @@ class WindowsTarget(Target):
 #
 
 class LinuxTarget(Target):
-    def __init__(self, distro, version, bits):
+    # @param directory Directory to work in; if None, we will use the configured linux_dir_in_chroot
+    def __init__(self, distro, version, bits, directory=None):
         super(LinuxTarget, self).__init__('linux', 2)
         self.distro = distro
         self.version = version
         self.bits = bits
         self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
+        if directory is None:
+            self.dir_in_chroot = config.get('linux_dir_in_chroot')
+        else:
+            self.dir_in_chroot = directory
 
         for g in glob.glob('%s/*' % self.work_dir_cdist()):
             rmtree(g)
@@ -304,10 +310,10 @@ class LinuxTarget(Target):
         self.set('PATH', '%s:/usr/local/bin' % (os.environ['PATH']))
 
     def work_dir_cdist(self):
-        return '%s/%s%s' % (config.get('linux_chroot_prefix'), self.chroot, config.get('linux_dir_in_chroot'))
+        return '%s/%s%s' % (config.get('linux_chroot_prefix'), self.chroot, self.dir_in_chroot)
 
     def work_dir_cscript(self):
-        return config.get('linux_dir_in_chroot')
+        return self.dir_in_chroot
 
     def command(self, c):
         # Work out the cwd for the chrooted command
@@ -439,13 +445,13 @@ class SourceTarget(Target):
 #    or osx-{32,64}
 #    or source      
 # @param debug True to build with debugging symbols (where possible)
-def target_factory(s, debug=False):
+def target_factory(s, debug, work):
     target = None
     if s.startswith('windows-'):
-        target = WindowsTarget(int(s.split('-')[1]))
+        target = WindowsTarget(int(s.split('-')[1]), work)
     elif s.startswith('ubuntu-') or s.startswith('debian-'):
         p = s.split('-')
-        target = LinuxTarget(p[0], p[1], int(p[2]))
+        target = LinuxTarget(p[0], p[1], int(p[2]), work)
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]))
     elif s == 'osx':
@@ -567,6 +573,7 @@ parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
 parser.add_argument('-t', '--target', help='target')
 parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
 parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
+parser.add_argument('--work', help='override default work directory')
 args = parser.parse_args()
 
 args.output = os.path.abspath(args.output)
@@ -580,7 +587,7 @@ if args.command == 'build':
     if args.target is None:
         error('you must specify -t or --target')
 
-    target = target_factory(args.target, args.debug)
+    target = target_factory(args.target, args.debug, os.path.abspath(args.work))
     project.checkout(target)
     target.build_dependencies(project)
     target.build(project)
@@ -591,7 +598,7 @@ elif args.command == 'package':
     if args.target is None:
         error('you must specify -t or --target')
         
-    target = target_factory(args.target, args.debug)
+    target = target_factory(args.target, args.debug, os.path.abspath(args.work))
 
     packages = target.package(project)
     if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
@@ -736,7 +743,7 @@ elif args.command == 'test':
     if args.target is None:
         error('you must specify -t or --target')
 
-    target = target_factory(args.target)
+    target = target_factory(args.target, args.debug, os.path.abspath(args.work))
     project.read_cscript('cscript')
     target.build(project)
 
