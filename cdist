@@ -30,13 +30,12 @@ import re
 # Configuration
 #
 
-print 
-
 class Config:
     def __init__(self):
         self.keys = ['linux_dir_in_chroot',
                      'linux_chroot_prefix',
                      'windows_environment_prefix',
+                     'mingw_prefix',
                      'git_prefix',
                      'osx_build_host',
                      'osx_dir_in_host',
@@ -62,7 +61,6 @@ class Config:
                         if k == s[0]:
                             self.dict[k] = s[1]
         except:
-#            pass
             raise
 
     def get(self, k):
@@ -252,8 +250,8 @@ class WindowsTarget(Target):
         else:
             mingw_name = 'x86_64'
 
-        mingw_path = '/mingw/%d/bin' % self.bits
-        mingw_prefixes = ['/mingw/%d' % self.bits, '/mingw/%d/%s-w64-mingw32' % (bits, mingw_name)]
+        mingw_path = '%s/%d/bin' % (config.get('mingw_prefix'), self.bits)
+        mingw_prefixes = ['/%s/%d' % (config.get('mingw_prefix'), self.bits), '%s/%d/%s-w64-mingw32' % (config.get('mingw_prefix'), bits, mingw_name)]
 
         self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.windows_prefix)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
@@ -321,6 +319,10 @@ class LinuxTarget(Target):
         log('schroot [%s] -> %s' % (cwd, c))
         command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
 
+    def cleanup(self):
+        for g in glob.glob('%s/*' % self.work_dir_cdist()):
+            rmtree(g)
+
 #
 # OS X
 #
@@ -339,8 +341,6 @@ class OSXTarget(Target):
     def command(self, c):
         # Work out the cwd for the chrooted command
         cwd = os.getcwd()
-        print cwd
-        print self.host_mount_dir
         assert(cwd.startswith(self.host_mount_dir))
         cwd = cwd[len(self.host_mount_dir):]
 
@@ -584,13 +584,14 @@ if args.command == 'build':
     project.checkout(target)
     target.build_dependencies(project)
     target.build(project)
-    target.cleanup()
+    if not args.keep:
+        target.cleanup()
 
 elif args.command == 'package':
     if args.target is None:
         error('you must specify -t or --target')
         
-    target = target_factory(args.target)
+    target = target_factory(args.target, args.debug)
 
     packages = target.package(project)
     if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
