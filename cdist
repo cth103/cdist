@@ -561,6 +561,8 @@ parser.add_argument('--work', help='override default work directory')
 args = parser.parse_args()
 
 args.output = os.path.abspath(args.output)
+if args.work is not None:
+    args.work = os.path.abspath(args.work)
 
 if args.project is None:
     error('you must specify -p or --project')
@@ -571,7 +573,7 @@ if args.command == 'build':
     if args.target is None:
         error('you must specify -t or --target')
 
-    target = target_factory(args.target, args.debug, os.path.abspath(args.work))
+    target = target_factory(args.target, args.debug, args.work)
     project.checkout(target)
     target.build_dependencies(project)
     target.build(project)
@@ -582,7 +584,7 @@ elif args.command == 'package':
     if args.target is None:
         error('you must specify -t or --target')
         
-    target = target_factory(args.target, args.debug, os.path.abspath(args.work))
+    target = target_factory(args.target, args.debug, args.work)
 
     packages = target.package(project)
     if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
@@ -727,7 +729,7 @@ elif args.command == 'test':
     if args.target is None:
         error('you must specify -t or --target')
 
-    target = target_factory(args.target, args.debug, os.path.abspath(args.work))
+    target = target_factory(args.target, args.debug, args.work)
     project.read_cscript('cscript')
     target.build(project)
 
