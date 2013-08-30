@@ -112,6 +112,20 @@ def command_and_read(c):
     f = os.fdopen(os.dup(p.stdout.fileno()))
     return f
 
+def read_wscript_variable(directory, variable):
+    f = open('%s/wscript' % directory, 'r')
+    while 1:
+        l = f.readline()
+        if l == '':
+            break
+        
+        s = l.split()
+        if len(s) == 3 and s[0] == variable:
+            f.close()
+            return s[2][1:-1]
+
+    f.close()
+    return None
 
 #
 # Version
@@ -416,10 +430,9 @@ class SourceTarget(Target):
 
     def package(self, project):
         project.checkout(self)
+        name = read_wscript_variable(os.getcwd(), 'APPNAME')
         command('./waf dist')
-        if project.directory != '.':
-            return os.path.abspath('%s-%s.tar.bz2' % (project.directory, project.version))
-        return os.path.abspath('%s-%s.tar.bz2' % (project.name, project.version))
+        return os.path.abspath('%s-%s.tar.bz2' % (name, project.version))
 
 
 # @param s Target string:
@@ -483,18 +496,9 @@ class Project(object):
         self.read_cscript('%s/cscript' % proj)
         
         if os.path.exists('%s/wscript' % proj):
-            f = open('%s/wscript' % proj, 'r')
-            version = None
-            while 1:
-                l = f.readline()
-                if l == '':
-                    break
-
-                s = l.split()
-                if len(s) == 3 and s[0] == "VERSION":
-                    self.version = Version(s[2])
-
-            f.close()
+            v = read_wscript_variable(proj, "VERSION");
+            if v is not None:
+                self.version = Version(v)
 
     def read_cscript(self, s):
         self.cscript = {}
