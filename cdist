@@ -261,21 +261,21 @@ class WindowsTarget(Target):
             error('windows prefix %s does not exist' % target.windows_prefix)
             
         if self.bits == 32:
-            mingw_name = 'i686'
+            self.mingw_name = 'i686'
         else:
-            mingw_name = 'x86_64'
+            self.mingw_name = 'x86_64'
 
         mingw_path = '%s/%d/bin' % (config.get('mingw_prefix'), self.bits)
-        mingw_prefixes = ['/%s/%d' % (config.get('mingw_prefix'), self.bits), '%s/%d/%s-w64-mingw32' % (config.get('mingw_prefix'), bits, mingw_name)]
+        mingw_prefixes = ['/%s/%d' % (config.get('mingw_prefix'), self.bits), '%s/%d/%s-w64-mingw32' % (config.get('mingw_prefix'), bits, self.mingw_name)]
 
         self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.windows_prefix)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
         self.set('PATH', '%s/bin:%s:%s' % (self.windows_prefix, mingw_path, os.environ['PATH']))
-        self.set('CC', '%s-w64-mingw32-gcc' % mingw_name)
-        self.set('CXX', '%s-w64-mingw32-g++' % mingw_name)
-        self.set('LD', '%s-w64-mingw32-ld' % mingw_name)
-        self.set('RANLIB', '%s-w64-mingw32-ranlib' % mingw_name)
-        self.set('WINRC', '%s-w64-mingw32-windres' % mingw_name)
+        self.set('CC', '%s-w64-mingw32-gcc' % self.mingw_name)
+        self.set('CXX', '%s-w64-mingw32-g++' % self.mingw_name)
+        self.set('LD', '%s-w64-mingw32-ld' % self.mingw_name)
+        self.set('RANLIB', '%s-w64-mingw32-ranlib' % self.mingw_name)
+        self.set('WINRC', '%s-w64-mingw32-windres' % self.mingw_name)
         cxx = '-I%s/include -I%s/include' % (self.windows_prefix, self.work_dir_cscript())
         link = '-L%s/lib -L%s/lib' % (self.windows_prefix, self.work_dir_cscript())
         for p in mingw_prefixes:
