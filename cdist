@@ -269,7 +269,7 @@ class WindowsTarget(Target):
         mingw_prefixes = ['/%s/%d' % (config.get('mingw_prefix'), self.bits), '%s/%d/%s-w64-mingw32' % (config.get('mingw_prefix'), bits, self.mingw_name)]
 
         self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.windows_prefix)
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.work_dir_cscript(), self.work_dir_cscript()))
         self.set('PATH', '%s/bin:%s:%s' % (self.windows_prefix, mingw_path, os.environ['PATH']))
         self.set('CC', '%s-w64-mingw32-gcc' % self.mingw_name)
         self.set('CXX', '%s-w64-mingw32-g++' % self.mingw_name)
