@@ -226,6 +226,9 @@ class Target(object):
     def set(self, a, b):
         self.variables[a] = b
 
+    def unset(self, a):
+        del(self.variables[a])
+
     def get(self, a):
         return self.variables[a]
 
@@ -258,7 +261,7 @@ class WindowsTarget(Target):
         
         self.windows_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
         if not os.path.exists(self.windows_prefix):
-            error('windows prefix %s does not exist' % target.windows_prefix)
+            error('windows prefix %s does not exist' % self.windows_prefix)
             
         if self.bits == 32:
             self.mingw_name = 'i686'
@@ -266,7 +269,7 @@ class WindowsTarget(Target):
             self.mingw_name = 'x86_64'
 
         mingw_path = '%s/%d/bin' % (config.get('mingw_prefix'), self.bits)
-        mingw_prefixes = ['/%s/%d' % (config.get('mingw_prefix'), self.bits), '%s/%d/%s-w64-mingw32' % (config.get('mingw_prefix'), bits, self.mingw_name)]
+        self.mingw_prefixes = ['/%s/%d' % (config.get('mingw_prefix'), self.bits), '%s/%d/%s-w64-mingw32' % (config.get('mingw_prefix'), bits, self.mingw_name)]
 
         self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.windows_prefix)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.work_dir_cscript(), self.work_dir_cscript()))
@@ -278,7 +281,7 @@ class WindowsTarget(Target):
         self.set('WINRC', '%s-w64-mingw32-windres' % self.mingw_name)
         cxx = '-I%s/include -I%s/include' % (self.windows_prefix, self.work_dir_cscript())
         link = '-L%s/lib -L%s/lib' % (self.windows_prefix, self.work_dir_cscript())
-        for p in mingw_prefixes:
+        for p in self.mingw_prefixes:
             cxx += ' -I%s/include' % p
             link += ' -L%s/lib' % p
         self.set('CXXFLAGS', '"%s"' % cxx)
@@ -561,7 +564,7 @@ parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
 parser.add_argument('-t', '--target', help='target')
 parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
 parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
-parser.add_argument('--work', help='override default work directory')
+parser.add_argument('-w', '--work', help='override default work directory')
 args = parser.parse_args()
 
 args.output = os.path.abspath(args.output)
@@ -736,6 +739,13 @@ elif args.command == 'test':
     target = target_factory(args.target, args.debug, args.work)
     project.read_cscript('cscript')
     target.build(project)
+
+elif args.command == 'shell':
+    if args.target is None:
+        error('you must specify -t or --target')
+
+    target = target_factory(args.target, args.debug, args.work)
+    target.command('bash')
 
 else:
     error('invalid command %s' % args.command)
