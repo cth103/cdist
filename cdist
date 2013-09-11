@@ -451,6 +451,9 @@ def target_factory(s, debug, work):
         target = WindowsTarget(int(s.split('-')[1]), work)
     elif s.startswith('ubuntu-') or s.startswith('debian-'):
         p = s.split('-')
+        if len(p) != 3:
+            print >>sys.stderr,"Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s
+            sys.exit(1)
         target = LinuxTarget(p[0], p[1], int(p[2]), work)
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]))
@@ -554,7 +557,7 @@ def append_version_to_debian_changelog(version):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('command')
-parser.add_argument('-p', '--project', help='project name', required=True)
+parser.add_argument('-p', '--project', help='project name')
 parser.add_argument('-d', '--directory', help='directory within project repo', default='.')
 parser.add_argument('--beta', help='beta release', action='store_true')
 parser.add_argument('--full', help='full release', action='store_true')
@@ -571,7 +574,7 @@ args.output = os.path.abspath(args.output)
 if args.work is not None:
     args.work = os.path.abspath(args.work)
 
-if args.project is None:
+if args.project is None and args.command != 'shell':
     error('you must specify -p or --project')
 
 project = Project(args.project, args.directory, args.checkout)
