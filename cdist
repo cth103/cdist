@@ -211,11 +211,30 @@ class Target(object):
                 dep = Project(d[0], '.', d[1])
                 dep.checkout(self)
                 self.build_dependencies(dep)
-                self.build(dep)
+
+                # Make the options to pass in from the option_defaults of the thing
+                # we are building and any options specified by the parent.
+                # The presence of option_defaults() is taken to mean that this
+                # cscript understands and expects options
+                options = {}
+                if 'option_defaults' in dep.cscript:
+                    options = dep.cscript['option_defaults']()
+                    if len(d) > 2:
+                        for k, v in d[2].iteritems():
+                            options[k] = v
+
+                    self.build(dep, options)
+                else:
+                    # Backwards compatibility
+                    self.build(dep)
+
         os.chdir(cwd)
 
-    def build(self, project):
-        project.cscript['build'](self)
+    def build(self, project, options=None):
+        if options is not None:
+            project.cscript['build'](self, options)
+        else:
+            project.cscript['build'](self)
 
     def package(self, project):
         project.checkout(self)
