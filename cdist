@@ -420,7 +420,7 @@ class OSXSingleTarget(OSXTarget):
 
 class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
-        super(OSXUniversalTarget, self, directory).__init__()
+        super(OSXUniversalTarget, self).__init__(directory)
         self.parts = []
         self.parts.append(OSXSingleTarget(32, directory))
         self.parts.append(OSXSingleTarget(64, directory))
