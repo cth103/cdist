@@ -325,8 +325,8 @@ class WindowsTarget(Target):
 #
 
 class LinuxTarget(Target):
-    # @param directory Directory to work in; if None, we will use the configured linux_dir_in_chroot
     def __init__(self, distro, version, bits, directory=None):
+        "directory -- directory to work in; if None, we will use the configured linux_dir_in_chroot"
         super(LinuxTarget, self).__init__('linux', 2)
         self.distro = distro
         self.version = version
@@ -370,10 +370,16 @@ class LinuxTarget(Target):
 #
 
 class OSXTarget(Target):
-    def __init__(self):
+    def __init__(self, directory=None):
+        "directory -- directory to work in; if None, we will use the configured osx_dir_in_host"
         super(OSXTarget, self).__init__('osx', 4)
 
-        for g in glob.glob('%s/*' % config.get('osx_dir_in_host')):
+        if directory is None:
+            self.dir_in_host = config.get('osx_dir_in_host')
+        else:
+            self.dir_in_host = directory
+
+        for g in glob.glob('%s/*' % self.dir_in_host):
             rmtree(g)
 
     def command(self, c):
@@ -381,8 +387,8 @@ class OSXTarget(Target):
 
 
 class OSXSingleTarget(OSXTarget):
-    def __init__(self, bits):
-        super(OSXSingleTarget, self).__init__()
+    def __init__(self, bits, directory=None):
+        super(OSXSingleTarget, self).__init__(directory)
         self.bits = bits
 
         if bits == 32:
@@ -406,18 +412,18 @@ class OSXSingleTarget(OSXTarget):
         return self.work_dir_cscript()
 
     def work_dir_cscript(self):
-        return '%s/%d' % (config.get('osx_dir_in_host'), self.bits)
+        return '%s/%d' % (self.dir_in_host, self.bits)
 
     def package(self, project):
         error('cannot package non-universal OS X versions')
 
 
 class OSXUniversalTarget(OSXTarget):
-    def __init__(self):
-        super(OSXUniversalTarget, self).__init__()
+    def __init__(self, directory=None):
+        super(OSXUniversalTarget, self, directory).__init__()
         self.parts = []
-        self.parts.append(OSXSingleTarget(32))
-        self.parts.append(OSXSingleTarget(64))
+        self.parts.append(OSXSingleTarget(32, directory))
+        self.parts.append(OSXSingleTarget(64, directory))
 
     def package(self, project):
         for p in self.parts:
@@ -475,12 +481,12 @@ def target_factory(s, debug, work):
             sys.exit(1)
         target = LinuxTarget(p[0], p[1], int(p[2]), work)
     elif s.startswith('osx-'):
-        target = OSXSingleTarget(int(s.split('-')[1]))
+        target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
         if args.command == 'build':
-            target = OSXSingleTarget(64)
+            target = OSXSingleTarget(64, work)
         else:
-            target = OSXUniversalTarget()
+            target = OSXUniversalTarget(work)
     elif s == 'source':
         target = SourceTarget()
 
