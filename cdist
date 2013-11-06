@@ -30,13 +30,12 @@ import re
 # Configuration
 #
 
-print 
-
 class Config:
     def __init__(self):
         self.keys = ['linux_dir_in_chroot',
                      'linux_chroot_prefix',
                      'windows_environment_prefix',
+                     'mingw_prefix',
                      'git_prefix',
                      'osx_build_host',
                      'osx_dir_in_host',
@@ -62,7 +61,6 @@ class Config:
                         if k == s[0]:
                             self.dict[k] = s[1]
         except:
-#            pass
             raise
 
     def get(self, k):
@@ -114,6 +112,20 @@ def command_and_read(c):
     f = os.fdopen(os.dup(p.stdout.fileno()))
     return f
 
+def read_wscript_variable(directory, variable):
+    f = open('%s/wscript' % directory, 'r')
+    while 1:
+        l = f.readline()
+        if l == '':
+            break
+        
+        s = l.split()
+        if len(s) == 3 and s[0] == variable:
+            f.close()
+            return s[2][1:-1]
+
+    f.close()
+    return None
 
 #
 # Version
@@ -199,11 +211,30 @@ class Target(object):
                 dep = Project(d[0], '.', d[1])
                 dep.checkout(self)
                 self.build_dependencies(dep)
-                self.build(dep)
+
+                # Make the options to pass in from the option_defaults of the thing
+                # we are building and any options specified by the parent.
+                # The presence of option_defaults() is taken to mean that this
+                # cscript understands and expects options
+                options = {}
+                if 'option_defaults' in dep.cscript:
+                    options = dep.cscript['option_defaults']()
+                    if len(d) > 2:
+                        for k, v in d[2].iteritems():
+                            options[k] = v
+
+                    self.build(dep, options)
+                else:
+                    # Backwards compatibility
+                    self.build(dep)
+
         os.chdir(cwd)
 
-    def build(self, project):
-        project.cscript['build'](self)
+    def build(self, project, options=None):
+        if options is not None:
+            project.cscript['build'](self, options)
+        else:
+            project.cscript['build'](self)
 
     def package(self, project):
         project.checkout(self)
@@ -213,6 +244,9 @@ class Target(object):
 
     def set(self, a, b):
         self.variables[a] = b
+
+    def unset(self, a):
+        del(self.variables[a])
 
     def get(self, a):
         return self.variables[a]
@@ -233,7 +267,8 @@ class Target(object):
 #
 
 class WindowsTarget(Target):
-    def __init__(self, bits, directory = None):
+    # @param directory directory to work in; if None, we will use a temporary directory
+    def __init__(self, bits, directory=None):
         super(WindowsTarget, self).__init__('windows', 2)
         self.bits = bits
         if directory is None:
@@ -245,27 +280,27 @@ class WindowsTarget(Target):
         
         self.windows_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
         if not os.path.exists(self.windows_prefix):
-            error('windows prefix %s does not exist' % target.windows_prefix)
+            error('windows prefix %s does not exist' % self.windows_prefix)
             
         if self.bits == 32:
-            mingw_name = 'i686'
+            self.mingw_name = 'i686'
         else:
-            mingw_name = 'x86_64'
+            self.mingw_name = 'x86_64'
 
-        mingw_path = '/mingw/%d/bin' % self.bits
-        mingw_prefixes = ['/mingw/%d' % self.bits, '/mingw/%d/%s-w64-mingw32' % (bits, mingw_name)]
+        mingw_path = '%s/%d/bin' % (config.get('mingw_prefix'), self.bits)
+        self.mingw_prefixes = ['/%s/%d' % (config.get('mingw_prefix'), self.bits), '%s/%d/%s-w64-mingw32' % (config.get('mingw_prefix'), bits, self.mingw_name)]
 
         self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.windows_prefix)
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig' % self.work_dir_cscript())
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.work_dir_cscript(), self.work_dir_cscript()))
         self.set('PATH', '%s/bin:%s:%s' % (self.windows_prefix, mingw_path, os.environ['PATH']))
-        self.set('CC', '%s-w64-mingw32-gcc' % mingw_name)
-        self.set('CXX', '%s-w64-mingw32-g++' % mingw_name)
-        self.set('LD', '%s-w64-mingw32-ld' % mingw_name)
-        self.set('RANLIB', '%s-w64-mingw32-ranlib' % mingw_name)
-        self.set('WINRC', '%s-w64-mingw32-windres' % mingw_name)
+        self.set('CC', '%s-w64-mingw32-gcc' % self.mingw_name)
+        self.set('CXX', '%s-w64-mingw32-g++' % self.mingw_name)
+        self.set('LD', '%s-w64-mingw32-ld' % self.mingw_name)
+        self.set('RANLIB', '%s-w64-mingw32-ranlib' % self.mingw_name)
+        self.set('WINRC', '%s-w64-mingw32-windres' % self.mingw_name)
         cxx = '-I%s/include -I%s/include' % (self.windows_prefix, self.work_dir_cscript())
         link = '-L%s/lib -L%s/lib' % (self.windows_prefix, self.work_dir_cscript())
-        for p in mingw_prefixes:
+        for p in self.mingw_prefixes:
             cxx += ' -I%s/include' % p
             link += ' -L%s/lib' % p
         self.set('CXXFLAGS', '"%s"' % cxx)
@@ -290,12 +325,17 @@ class WindowsTarget(Target):
 #
 
 class LinuxTarget(Target):
-    def __init__(self, distro, version, bits):
+    def __init__(self, distro, version, bits, directory=None):
+        "directory -- directory to work in; if None, we will use the configured linux_dir_in_chroot"
         super(LinuxTarget, self).__init__('linux', 2)
         self.distro = distro
         self.version = version
         self.bits = bits
         self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
+        if directory is None:
+            self.dir_in_chroot = config.get('linux_dir_in_chroot')
+        else:
+            self.dir_in_chroot = directory
 
         for g in glob.glob('%s/*' % self.work_dir_cdist()):
             rmtree(g)
@@ -306,10 +346,10 @@ class LinuxTarget(Target):
         self.set('PATH', '%s:/usr/local/bin' % (os.environ['PATH']))
 
     def work_dir_cdist(self):
-        return '%s/%s%s' % (config.get('linux_chroot_prefix'), self.chroot, config.get('linux_dir_in_chroot'))
+        return '%s/%s%s' % (config.get('linux_chroot_prefix'), self.chroot, self.dir_in_chroot)
 
     def work_dir_cscript(self):
-        return config.get('linux_dir_in_chroot')
+        return self.dir_in_chroot
 
     def command(self, c):
         # Work out the cwd for the chrooted command
@@ -321,15 +361,25 @@ class LinuxTarget(Target):
         log('schroot [%s] -> %s' % (cwd, c))
         command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
 
+    def cleanup(self):
+        for g in glob.glob('%s/*' % self.work_dir_cdist()):
+            rmtree(g)
+
 #
 # OS X
 #
 
 class OSXTarget(Target):
-    def __init__(self):
+    def __init__(self, directory=None):
+        "directory -- directory to work in; if None, we will use the configured osx_dir_in_host"
         super(OSXTarget, self).__init__('osx', 4)
 
-        for g in glob.glob('%s/*' % config.get('osx_dir_in_host')):
+        if directory is None:
+            self.dir_in_host = config.get('osx_dir_in_host')
+        else:
+            self.dir_in_host = directory
+
+        for g in glob.glob('%s/*' % self.dir_in_host):
             rmtree(g)
 
     def command(self, c):
@@ -337,8 +387,8 @@ class OSXTarget(Target):
 
 
 class OSXSingleTarget(OSXTarget):
-    def __init__(self, bits):
-        super(OSXSingleTarget, self).__init__()
+    def __init__(self, bits, directory=None):
+        super(OSXSingleTarget, self).__init__(directory)
         self.bits = bits
 
         if bits == 32:
@@ -362,18 +412,21 @@ class OSXSingleTarget(OSXTarget):
         return self.work_dir_cscript()
 
     def work_dir_cscript(self):
-        return '%s/%d' % (config.get('osx_dir_in_host'), self.bits)
+        return '%s/%d' % (self.dir_in_host, self.bits)
 
     def package(self, project):
         error('cannot package non-universal OS X versions')
 
 
 class OSXUniversalTarget(OSXTarget):
-    def __init__(self):
-        super(OSXUniversalTarget, self).__init__()
+    def __init__(self, directory=None):
+        super(OSXUniversalTarget, self).__init__(directory)
         self.parts = []
-        self.parts.append(OSXSingleTarget(32))
-        self.parts.append(OSXSingleTarget(64))
+        self.parts.append(OSXSingleTarget(32, directory))
+        self.parts.append(OSXSingleTarget(64, directory))
+
+    def work_dir_cscript(self):
+        return self.dir_in_host
 
     def package(self, project):
         for p in self.parts:
@@ -381,7 +434,7 @@ class OSXUniversalTarget(OSXTarget):
             p.build_dependencies(project)
             p.build(project)
 
-        return project.cscript['package'](self.parts[-1], project.version)
+        return project.cscript['package'](self, project.version)
     
 
 #
@@ -408,10 +461,9 @@ class SourceTarget(Target):
 
     def package(self, project):
         project.checkout(self)
+        name = read_wscript_variable(os.getcwd(), 'APPNAME')
         command('./waf dist')
-        if project.directory != '.':
-            return os.path.abspath('%s-%s.tar.bz2' % (project.directory, project.version))
-        return os.path.abspath('%s-%s.tar.bz2' % (project.name, project.version))
+        return os.path.abspath('%s-%s.tar.bz2' % (name, project.version))
 
 
 # @param s Target string:
@@ -421,20 +473,23 @@ class SourceTarget(Target):
 #    or osx-{32,64}
 #    or source      
 # @param debug True to build with debugging symbols (where possible)
-def target_factory(s, debug=False):
+def target_factory(s, debug, work):
     target = None
     if s.startswith('windows-'):
-        target = WindowsTarget(int(s.split('-')[1]))
+        target = WindowsTarget(int(s.split('-')[1]), work)
     elif s.startswith('ubuntu-') or s.startswith('debian-'):
         p = s.split('-')
-        target = LinuxTarget(p[0], p[1], int(p[2]))
+        if len(p) != 3:
+            print >>sys.stderr,"Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s
+            sys.exit(1)
+        target = LinuxTarget(p[0], p[1], int(p[2]), work)
     elif s.startswith('osx-'):
-        target = OSXSingleTarget(int(s.split('-')[1]))
+        target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
         if args.command == 'build':
-            target = OSXSingleTarget(64)
+            target = OSXSingleTarget(64, work)
         else:
-            target = OSXUniversalTarget()
+            target = OSXUniversalTarget(work)
     elif s == 'source':
         target = SourceTarget()
 
@@ -475,18 +530,9 @@ class Project(object):
         self.read_cscript('%s/cscript' % proj)
         
         if os.path.exists('%s/wscript' % proj):
-            f = open('%s/wscript' % proj, 'r')
-            version = None
-            while 1:
-                l = f.readline()
-                if l == '':
-                    break
-
-                s = l.split()
-                if len(s) == 3 and s[0] == "VERSION":
-                    self.version = Version(s[2])
-
-            f.close()
+            v = read_wscript_variable(proj, "VERSION");
+            if v is not None:
+                self.version = Version(v)
 
     def read_cscript(self, s):
         self.cscript = {}
@@ -539,7 +585,7 @@ def append_version_to_debian_changelog(version):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('command')
-parser.add_argument('-p', '--project', help='project name', required=True)
+parser.add_argument('-p', '--project', help='project name')
 parser.add_argument('-d', '--directory', help='directory within project repo', default='.')
 parser.add_argument('--beta', help='beta release', action='store_true')
 parser.add_argument('--full', help='full release', action='store_true')
@@ -549,11 +595,14 @@ parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
 parser.add_argument('-t', '--target', help='target')
 parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
 parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
+parser.add_argument('-w', '--work', help='override default work directory')
 args = parser.parse_args()
 
 args.output = os.path.abspath(args.output)
+if args.work is not None:
+    args.work = os.path.abspath(args.work)
 
-if args.project is None:
+if args.project is None and args.command != 'shell':
     error('you must specify -p or --project')
 
 project = Project(args.project, args.directory, args.checkout)
@@ -562,17 +611,18 @@ if args.command == 'build':
     if args.target is None:
         error('you must specify -t or --target')
 
-    target = target_factory(args.target, args.debug)
+    target = target_factory(args.target, args.debug, args.work)
     project.checkout(target)
     target.build_dependencies(project)
     target.build(project)
-    target.cleanup()
+    if not args.keep:
+        target.cleanup()
 
 elif args.command == 'package':
     if args.target is None:
         error('you must specify -t or --target')
         
-    target = target_factory(args.target)
+    target = target_factory(args.target, args.debug, args.work)
 
     packages = target.package(project)
     if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
@@ -720,9 +770,16 @@ elif args.command == 'test':
     if args.target is None:
         error('you must specify -t or --target')
 
-    target = target_factory(args.target)
+    target = target_factory(args.target, args.debug, args.work)
     project.read_cscript('cscript')
     target.build(project)
+
+elif args.command == 'shell':
+    if args.target is None:
+        error('you must specify -t or --target')
+
+    target = target_factory(args.target, args.debug, args.work)
+    target.command('bash')
 
 else:
     error('invalid command %s' % args.command)
