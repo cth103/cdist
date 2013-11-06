@@ -677,9 +677,12 @@ elif args.command == 'manual':
     target = SourceTarget()
     project.checkout(target)
 
-    dirs = project.cscript['make_manual'](target)
-    for d in dirs:
-        copytree(d, '%s/%s' % (args.output, os.path.basename(d)))
+    outs = project.cscript['make_manual'](target)
+    for o in outs:
+        if os.path.isfile(o):
+            copyfile(o, '%s/%s' % (args.output, os.path.basename(o)))
+        else:
+            copytree(o, '%s/%s' % (args.output, os.path.basename(o)))
 
     target.cleanup()
 
