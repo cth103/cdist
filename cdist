@@ -426,7 +426,7 @@ class OSXUniversalTarget(OSXTarget):
         self.parts.append(OSXSingleTarget(64, directory))
 
     def work_dir_cscript(self):
-        return '%s/%d' % self.dir_in_host
+        return self.dir_in_host
 
     def package(self, project):
         for p in self.parts:
