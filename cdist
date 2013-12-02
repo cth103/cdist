@@ -777,8 +777,6 @@ elif args.command == 'test':
         error('you must specify -t or --target')
 
     target = target_factory(args.target, args.debug, args.work)
-    project.checkout(target)
-    project.read_cscript('cscript')
     target.test(project)
 
 elif args.command == 'shell':
