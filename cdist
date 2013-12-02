@@ -242,6 +242,12 @@ class Target(object):
         project.cscript['build'](self)
         return project.cscript['package'](self, project.version)
 
+    def test(self, project):
+        project.checkout(self)
+        self.build_dependencies(project)
+        project.cscript['build'](self)
+        project.cscript['test'](self)
+
     def set(self, a, b):
         self.variables[a] = b
 
@@ -772,7 +778,7 @@ elif args.command == 'test':
 
     target = target_factory(args.target, args.debug, args.work)
     project.read_cscript('cscript')
-    target.build(project)
+    target.test(project)
 
 elif args.command == 'shell':
     if args.target is None:
