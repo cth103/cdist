@@ -785,11 +785,11 @@ elif args.command == 'test':
         target.test(project)
     except Error as e:
         if target is not None:
-            target.cleanup(project)
+            target.cleanup()
         raise
         
     if target is not None:
-        target.cleanup(project)
+        target.cleanup()
 
 elif args.command == 'shell':
     if args.target is None:
