@@ -778,6 +778,7 @@ elif args.command == 'test':
 
     target = target_factory(args.target, args.debug, args.work)
     target.test(project)
+    target.cleanup(project)
 
 elif args.command == 'shell':
     if args.target is None:
