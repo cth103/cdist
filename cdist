@@ -26,6 +26,14 @@ import datetime
 import subprocess
 import re
 
+class Error(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return '\x1b[31m%s\x1b[0m' % repr(self.value)
+    def __repr__(self):
+        return str(self)
+
 #
 # Configuration
 #
@@ -67,8 +75,7 @@ class Config:
         if k in self.dict:
             return self.dict[k]
 
-        print >>sys.stderr,'Required setting %s not found' % k
-        sys.exit(1)
+        raise Error('Required setting %s not found' % k)
 
 config = Config()
 
@@ -79,10 +86,6 @@ config = Config()
 def log(m):
     if not args.quiet:
         print '\x1b[33m* %s\x1b[0m' % m
-
-def error(e):
-    print '\x1b[31mError: %s\x1b[0m' % e
-    sys.exit(1)
 
 def copytree(a, b):
     log('copy %s -> %s' % (a, b))
@@ -104,7 +107,7 @@ def command(c, can_fail=False):
     log(c)
     r = os.system(c)
     if (r >> 8) and not can_fail:
-        error('command %s failed' % c)
+        raise Error('command %s failed' % c)
 
 def command_and_read(c):
     log(c)
@@ -286,7 +289,7 @@ class WindowsTarget(Target):
         
         self.windows_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
         if not os.path.exists(self.windows_prefix):
-            error('windows prefix %s does not exist' % self.windows_prefix)
+            raise Error('windows prefix %s does not exist' % self.windows_prefix)
             
         if self.bits == 32:
             self.mingw_name = 'i686'
@@ -421,7 +424,7 @@ class OSXSingleTarget(OSXTarget):
         return '%s/%d' % (self.dir_in_host, self.bits)
 
     def package(self, project):
-        error('cannot package non-universal OS X versions')
+        raise Error('cannot package non-universal OS X versions')
 
 
 class OSXUniversalTarget(OSXTarget):
@@ -609,13 +612,13 @@ if args.work is not None:
     args.work = os.path.abspath(args.work)
 
 if args.project is None and args.command != 'shell':
-    error('you must specify -p or --project')
+    raise Error('you must specify -p or --project')
 
 project = Project(args.project, args.directory, args.checkout)
 
 if args.command == 'build':
     if args.target is None:
-        error('you must specify -t or --target')
+        raise Error('you must specify -t or --target')
 
     target = target_factory(args.target, args.debug, args.work)
     project.checkout(target)
@@ -626,7 +629,7 @@ if args.command == 'build':
 
 elif args.command == 'package':
     if args.target is None:
-        error('you must specify -t or --target')
+        raise Error('you must specify -t or --target')
         
     target = target_factory(args.target, args.debug, args.work)
 
@@ -650,7 +653,7 @@ elif args.command == 'package':
 
 elif args.command == 'release':
     if args.full is False and args.beta is False:
-        error('you must specify --full or --beta')
+        raise Error('you must specify --full or --beta')
 
     target = SourceTarget()
     project.checkout(target)
@@ -774,18 +777,26 @@ elif args.command == 'latest':
 
 elif args.command == 'test':
     if args.target is None:
-        error('you must specify -t or --target')
+        raise Error('you must specify -t or --target')
 
-    target = target_factory(args.target, args.debug, args.work)
-    target.test(project)
-    target.cleanup(project)
+    target = None
+    try:
+        target = target_factory(args.target, args.debug, args.work)
+        target.test(project)
+    except Error as e:
+        if target is not None:
+            target.cleanup(project)
+        raise
+        
+    if target is not None:
+        target.cleanup(project)
 
 elif args.command == 'shell':
     if args.target is None:
-        error('you must specify -t or --target')
+        raise Error('you must specify -t or --target')
 
     target = target_factory(args.target, args.debug, args.work)
     target.command('bash')
 
 else:
-    error('invalid command %s' % args.command)
+    raise Error('invalid command %s' % args.command)
