@@ -234,10 +234,7 @@ class Target(object):
         os.chdir(cwd)
 
     def build(self, project, options=None):
-        if options is not None:
-            project.cscript['build'](self, options)
-        else:
-            project.cscript['build'](self)
+        project.cscript['build'](self, options)
 
     def package(self, project):
         project.checkout(self)
