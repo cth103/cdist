@@ -217,8 +217,6 @@ class Target(object):
 
                 # Make the options to pass in from the option_defaults of the thing
                 # we are building and any options specified by the parent.
-                # The presence of option_defaults() is taken to mean that this
-                # cscript understands and expects options
                 options = {}
                 if 'option_defaults' in dep.cscript:
                     options = dep.cscript['option_defaults']()
@@ -226,14 +224,11 @@ class Target(object):
                         for k, v in d[2].iteritems():
                             options[k] = v
 
-                    self.build(dep, options)
-                else:
-                    # Backwards compatibility
-                    self.build(dep)
+                self.build(dep, options)
 
         os.chdir(cwd)
 
-    def build(self, project, options=None):
+    def build(self, project, options):
         project.cscript['build'](self, options)
 
     def package(self, project):
