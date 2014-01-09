@@ -212,19 +212,19 @@ class Target(object):
 
         os.chdir(cwd)
 
-    def build(self, project, options):
+    def build(self, project, options=None):
         project.cscript['build'](self, options)
 
     def package(self, project):
         project.checkout(self)
         self.build_dependencies(project)
-        project.cscript['build'](self)
+        self.build(project)
         return project.cscript['package'](self, project.version)
 
     def test(self, project):
         project.checkout(self)
         self.build_dependencies(project)
-        project.cscript['build'](self)
+        self.build(project)
         project.cscript['test'](self)
 
     def set(self, a, b):
