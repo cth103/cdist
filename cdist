@@ -136,16 +136,16 @@ def read_wscript_variable(directory, variable):
 
 class Version:
     def __init__(self, s):
-        self.pre = False
+        self.devel = False
 
         if s.startswith("'"):
             s = s[1:]
         if s.endswith("'"):
             s = s[0:-1]
         
-        if s.endswith('pre'):
+        if s.endswith('devel'):
             s = s[0:-3]
-            self.pre = True
+            self.devel = True
 
         p = s.split('.')
         self.major = int(p[0])
@@ -158,22 +158,20 @@ class Version:
     def bump_minor(self):
         self.minor += 1
         self.micro = 0
-        self.pre = False
 
     def bump_micro(self):
         self.micro += 1
-        self.pre = False
 
-    def to_pre(self):
-        self.pre = True
+    def to_devel(self):
+        self.devel = True
 
     def to_release(self):
-        self.pre = False
+        self.devel = False
 
     def __str__(self):
         s = '%d.%02d.%d' % (self.major, self.minor, self.micro)
-        if self.pre:
-            s += 'pre'
+        if self.devel:
+            s += 'devel'
 
         return s
 
@@ -636,6 +634,10 @@ elif args.command == 'release':
 
     version = project.version
     version.to_release()
+    if args.minor:
+        version.bump_minor()
+    else:
+        version.bump_micro()
 
     set_version_in_wscript(version)
     append_version_to_changelog(version)
@@ -644,12 +646,7 @@ elif args.command == 'release':
     command('git commit -a -m "Bump version"')
     command('git tag -m "v%s" v%s' % (version, version))
 
-    if args.minor:
-        version.bump_minor()
-    else:
-        version.bump_micro()
-    version.to_pre()
-
+    version.to_devel()
     set_version_in_wscript(version)
     command('git commit -a -m "Bump version"')
     command('git push')
