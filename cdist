@@ -144,8 +144,11 @@ class Version:
             s = s[0:-1]
         
         if s.endswith('devel'):
-            s = s[0:-3]
+            s = s[0:-5]
             self.devel = True
+
+        if s.endswith('pre'):
+            s = s[0:-3]
 
         p = s.split('.')
         self.major = int(p[0])
