@@ -456,6 +456,7 @@ class SourceTarget(Target):
 #       windows-{32,64}
 #    or ubuntu-version-{32,64}
 #    or debian-version-{32,64}
+#    or centos-version-{32,64}
 #    or osx-{32,64}
 #    or source      
 # @param debug True to build with debugging symbols (where possible)
@@ -463,7 +464,7 @@ def target_factory(s, debug, work):
     target = None
     if s.startswith('windows-'):
         target = WindowsTarget(int(s.split('-')[1]), work)
-    elif s.startswith('ubuntu-') or s.startswith('debian-'):
+    elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-'):
         p = s.split('-')
         if len(p) != 3:
             print >>sys.stderr,"Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s
