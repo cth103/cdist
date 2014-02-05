@@ -627,7 +627,8 @@ elif args.command == 'package':
         for p in packages:
             copyfile(p, '%s/%s' % (args.output, os.path.basename(p)))
 
-    target.cleanup()
+    if not args.keep:
+        target.cleanup()
 
 elif args.command == 'release':
     if args.minor is False and args.micro is False:
