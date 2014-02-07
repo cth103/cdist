@@ -616,7 +616,7 @@ elif args.command == 'package':
         packages = [packages]
 
     if target.platform == 'linux':
-        out = '%s/%s-%d' % (args.output, target.version, target.bits)
+        out = '%s/%s-%s-%d' % (args.output, target.distro, target.version, target.bits)
         try:
             os.makedirs(out)
         except:
