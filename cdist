@@ -232,6 +232,7 @@ class Target(object):
         project.cscript['test'](self)
 
     def set(self, a, b):
+        print "Target set %s=%s" % (a, b)
         self.variables[a] = b
 
     def unset(self, a):
