@@ -215,6 +215,7 @@ class Target(object):
 
     def build(self, project, options=None):
         variables = self.variables
+        print 'Target %s builds %s with %s' % (self.platform, project.name, self.variables)
         project.cscript['build'](self, options)
         self.variables = variables
 
