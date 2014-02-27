@@ -25,6 +25,7 @@ import argparse
 import datetime
 import subprocess
 import re
+import copy
 
 class Error(Exception):
     def __init__(self, value):
@@ -214,7 +215,7 @@ class Target(object):
         os.chdir(cwd)
 
     def build(self, project, options=None):
-        variables = self.variables
+        variables = copy.copy(self.variables)
         print 'Target %s builds %s with %s' % (self.platform, project.name, self.variables)
         project.cscript['build'](self, options)
         self.variables = variables
