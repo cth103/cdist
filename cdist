@@ -753,6 +753,9 @@ elif args.command == 'latest':
     if m:
         tags = m.group(1).split(', ')
         for t in tags:
+            s = t.split()
+            if len(s) > 1:
+                t = s[1]
             if len(t) > 0 and t[0] == 'v':
                 latest = t[1:]
 
