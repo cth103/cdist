@@ -26,6 +26,7 @@ import datetime
 import subprocess
 import re
 import copy
+import inspect
 
 class Error(Exception):
     def __init__(self, value):
@@ -217,7 +218,10 @@ class Target(object):
     def build(self, project, options=None):
         variables = copy.copy(self.variables)
         print 'Target %s builds %s with %s' % (self.platform, project.name, self.variables)
-        project.cscript['build'](self, options)
+        if len(inspect.getargspec(project.cscript['build']).args) == 2:
+            project.cscript['build'](self, options)
+        else:
+            project.cscript['build'](self)
         self.variables = variables
 
     def package(self, project):
