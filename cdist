@@ -246,6 +246,12 @@ class Target(object):
     def get(self, a):
         return self.variables[a]
 
+    def append_with_space(self, k, v):
+        if not k in self.variables:
+            self.variables[k] = v
+        else:
+            self.variables[k] = '%s %s' % (self.variables[k], v)
+
     def variables_string(self, escaped_quotes=False):
         e = ''
         for k, v in self.variables.iteritems():
