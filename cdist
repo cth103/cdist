@@ -40,20 +40,35 @@ class Error(Exception):
 # Configuration
 #
 
+class Option(object):
+    def __init__(self, key):
+        self.key = key
+        self.value = None
+
+    def offer(self, key, value):
+        if key == self.key:
+            self.value = value
+
+class BoolOption(object):
+    def __init__(self, key):
+        self.key = key
+        self.value = False
+
+    def offer(self, key, value):
+        if key == self.key:
+            self.value = (value == 'yes' or value == '1' or value == 'true')
+
 class Config:
     def __init__(self):
-        self.keys = ['linux_dir_in_chroot',
-                     'linux_chroot_prefix',
-                     'windows_environment_prefix',
-                     'mingw_prefix',
-                     'git_prefix',
-                     'osx_build_host',
-                     'osx_dir_in_host',
-                     'osx_environment_prefix',
-                     'osx_sdk_prefix',
-                     'osx_sdk']
-
-        self.dict = dict()
+        self.options = [ Option('linux_chroot_prefix'),
+                         BoolOption('chroot_host_mounted'),
+                         Option('windows_environment_prefix'),
+                         Option('mingw_prefix'),
+                         Option('git_prefix'),
+                         Option('osx_build_host'),
+                         Option('osx_environment_prefix'),
+                         Option('osx_sdk_prefix'),
+                         Option('osx_sdk') ]
 
         try:
             f = open('%s/.config/cdist' % os.path.expanduser('~'), 'r')
@@ -67,15 +82,15 @@ class Config:
 
                 s = l.strip().split()
                 if len(s) == 2:
-                    for k in self.keys:
-                        if k == s[0]:
-                            self.dict[k] = s[1]
+                    for k in self.options:
+                        k.offer(s[0], s[1])
         except:
             raise
 
     def get(self, k):
-        if k in self.dict:
-            return self.dict[k]
+        for o in self.options:
+            if o.key == k:
+                return o.value
 
         raise Error('Required setting %s not found' % k)
 
@@ -132,6 +147,10 @@ def read_wscript_variable(directory, variable):
     f.close()
     return None
 
+def remove_prefix(string, prefix):
+    assert(string.startswith(prefix))
+    return string[len(prefix):]
+
 #
 # Version
 #
@@ -185,9 +204,19 @@ class Version:
 #
 
 class Target(object):
-    def __init__(self, platform, parallel):
+    # @param directory directory to work in; if None we will use a temporary directory
+    # Temporary directories will be removed after use; specified directories will not
+    def __init__(self, platform, parallel, directory=None):
         self.platform = platform
         self.parallel = parallel
+
+        if directory is None:
+            self.directory = tempfile.mkdtemp('', 'tmp', self.temporary_directory)
+            self.rmdir = True
+        else:
+            self.directory = directory
+            self.rmdir = False
+
         # Environment variables that we will use when we call cscripts
         self.variables = {}
         self.debug = False
@@ -261,24 +290,18 @@ class Target(object):
         return e
 
     def cleanup(self):
-        pass
+        if self.rmdir:
+            rmtree(self.directory)
 
 # 
 # Windows
 #
 
 class WindowsTarget(Target):
-    # @param directory directory to work in; if None, we will use a temporary directory
     def __init__(self, bits, directory=None):
-        super(WindowsTarget, self).__init__('windows', 2)
+        super(WindowsTarget, self).__init__('windows', 2, directory)
         self.bits = bits
-        if directory is None:
-            self.directory = tempfile.mkdtemp()
-            self.rmdir = True
-        else:
-            self.directory = directory
-            self.rmdir = False
-        
+
         self.windows_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
         if not os.path.exists(self.windows_prefix):
             raise Error('windows prefix %s does not exist' % self.windows_prefix)
@@ -317,29 +340,26 @@ class WindowsTarget(Target):
         log('host -> %s' % c)
         command('%s %s' % (self.variables_string(), c))
 
-    def cleanup(self):
-        if self.rmdir:
-            rmtree(self.directory)
-
 #
 # Linux
 #
 
 class LinuxTarget(Target):
     def __init__(self, distro, version, bits, directory=None):
-        "directory -- directory to work in; if None, we will use the configured linux_dir_in_chroot"
-        super(LinuxTarget, self).__init__('linux', 2)
+        self.temporary_directory = '/tmp'
+        super(LinuxTarget, self).__init__('linux', 2, directory)
         self.distro = distro
         self.version = version
         self.bits = bits
+        # e.g. ubuntu-14.04-64
         self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
-        if directory is None:
-            self.dir_in_chroot = config.get('linux_dir_in_chroot')
+        # e.g. /home/carl/Environments/ubuntu-14.04-64
+        self.chroot_prefix = '%s/%s' % (config.get('linux_chroot_prefix'), self.chroot)
+        # e.g. /home/carl/Test/frobozz
+        if config.get('chroot_host_mounted'):
+            self.dir_in_chroot = self.directory
         else:
-            self.dir_in_chroot = directory
-
-        for g in glob.glob('%s/*' % self.work_dir_cdist()):
-            rmtree(g)
+            self.dir_in_chroot = remove_prefix(self.directory, self.chroot_prefix)
 
         self.set('CXXFLAGS', '-I%s/include' % self.work_dir_cscript())
         self.set('LINKFLAGS', '-L%s/lib' % self.work_dir_cscript())
@@ -347,24 +367,22 @@ class LinuxTarget(Target):
         self.set('PATH', '%s:/usr/local/bin' % (os.environ['PATH']))
 
     def work_dir_cdist(self):
-        return '%s/%s%s' % (config.get('linux_chroot_prefix'), self.chroot, self.dir_in_chroot)
+        if config.get('chroot_host_mounted'):
+            return self.work_dir_cscript()
+        else:
+            return '%s%s' % (self.chroot_prefix, self.dir_in_chroot)
 
     def work_dir_cscript(self):
         return self.dir_in_chroot
 
     def command(self, c):
-        # Work out the cwd for the chrooted command
-        cwd = os.getcwd()
-        prefix = '%s/%s' % (config.get('linux_chroot_prefix'), self.chroot)
-        assert(cwd.startswith(prefix))
-        cwd = cwd[len(prefix):]
-
-        log('schroot [%s] -> %s' % (cwd, c))
-        command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
-
-    def cleanup(self):
-        for g in glob.glob('%s/*' % self.work_dir_cdist()):
-            rmtree(g)
+        if config.get('chroot_host_mounted'):
+            command('%s schroot -c %s -p -- %s' % (self.variables_string(), self.chroot, c))
+        else:
+            # Work out the cwd for the chrooted command
+            cwd = remove_prefix(os.getcwd(), self.chroot_prefix)
+            log('schroot [%s] -> %s' % (cwd, c))
+            command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
 
 #
 # OS X
@@ -372,16 +390,7 @@ class LinuxTarget(Target):
 
 class OSXTarget(Target):
     def __init__(self, directory=None):
-        "directory -- directory to work in; if None, we will use the configured osx_dir_in_host"
-        super(OSXTarget, self).__init__('osx', 4)
-
-        if directory is None:
-            self.dir_in_host = config.get('osx_dir_in_host')
-        else:
-            self.dir_in_host = directory
-
-        for g in glob.glob('%s/*' % self.dir_in_host):
-            rmtree(g)
+        super(OSXTarget, self).__init__('osx', 4, directory)
 
     def command(self, c):
         command('%s %s' % (self.variables_string(False), c))
@@ -413,7 +422,7 @@ class OSXSingleTarget(OSXTarget):
         return self.work_dir_cscript()
 
     def work_dir_cscript(self):
-        return '%s/%d' % (self.dir_in_host, self.bits)
+        return '%s/%d' % (self.directory, self.bits)
 
     def package(self, project):
         raise Error('cannot package non-universal OS X versions')
