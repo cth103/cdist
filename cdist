@@ -523,8 +523,8 @@ class Project(object):
         command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.work_dir_cdist(), self.name))
         os.chdir('%s/src/%s' % (target.work_dir_cdist(), self.name))
         command('git checkout %s %s %s' % (flags, self.specifier, redirect))
-        command('git submodule init')
-        command('git submodule update')
+        command('git submodule init --quiet')
+        command('git submodule update --quiet')
         os.chdir(self.directory)
 
         proj = '%s/src/%s/%s' % (target.work_dir_cdist(), self.name, self.directory)
