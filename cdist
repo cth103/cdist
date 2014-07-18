@@ -299,6 +299,7 @@ class Target(object):
 
 class WindowsTarget(Target):
     def __init__(self, bits, directory=None):
+        self.temporary_directory = '/tmp'
         super(WindowsTarget, self).__init__('windows', 2, directory)
         self.bits = bits
 
@@ -390,6 +391,7 @@ class LinuxTarget(Target):
 
 class OSXTarget(Target):
     def __init__(self, directory=None):
+        self.temporary_directory = '/tmp'
         super(OSXTarget, self).__init__('osx', 4, directory)
 
     def command(self, c):
