@@ -511,6 +511,7 @@ class Project(object):
         self.directory = directory
         self.version = None
         self.specifier = specifier
+        self.git_commit = None
         if self.specifier is None:
             self.specifier = 'master'
 
@@ -523,6 +524,7 @@ class Project(object):
         command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.work_dir_cdist(), self.name))
         os.chdir('%s/src/%s' % (target.work_dir_cdist(), self.name))
         command('git checkout %s %s %s' % (flags, self.specifier, redirect))
+        self.git_commit = command_and_read('git rev-parse --short=7 HEAD').readline().strip()
         command('git submodule init --quiet')
         command('git submodule update --quiet')
         os.chdir(self.directory)
@@ -581,6 +583,11 @@ def append_version_to_debian_changelog(version):
 
     command('dch -b -v %s-1 "New upstream release."' % version)
 
+def devel_to_git(project, filename):
+    if project.git_commit is not None:
+        filename = filename.replace('devel', '-%s' % project.git_commit)
+    return filename
+
 #
 # Command-line parser
 #
@@ -637,10 +644,10 @@ elif args.command == 'package':
         except:
             pass
         for p in packages:
-            copyfile(p, '%s/%s' % (out, os.path.basename(p)))
+            copyfile(p, '%s/%s' % (out, os.path.basename(devel_to_git(project, p))))
     else:
         for p in packages:
-            copyfile(p, '%s/%s' % (args.output, os.path.basename(p)))
+            copyfile(p, '%s/%s' % (args.output, os.path.basename(devel_to_git(project, p))))
 
     if not args.keep:
         target.cleanup()
