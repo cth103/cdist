@@ -455,6 +455,7 @@ class OSXUniversalTarget(OSXTarget):
 
 class SourceTarget(Target):
     def __init__(self):
+        self.temporary_directory = '/tmp'
         super(SourceTarget, self).__init__('source', 2)
         self.directory = tempfile.mkdtemp()
 
