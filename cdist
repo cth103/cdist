@@ -28,6 +28,8 @@ import re
 import copy
 import inspect
 
+TEMPORARY_DIRECTORY = '/tmp'
+
 class Error(Exception):
     def __init__(self, value):
         self.value = value
@@ -61,7 +63,6 @@ class BoolOption(object):
 class Config:
     def __init__(self):
         self.options = [ Option('linux_chroot_prefix'),
-                         BoolOption('chroot_host_mounted'),
                          Option('windows_environment_prefix'),
                          Option('mingw_prefix'),
                          Option('git_prefix'),
@@ -147,10 +148,6 @@ def read_wscript_variable(directory, variable):
     f.close()
     return None
 
-def remove_prefix(string, prefix):
-    assert(string.startswith(prefix))
-    return string[len(prefix):]
-
 #
 # Version
 #
@@ -211,11 +208,13 @@ class Target(object):
         self.parallel = parallel
 
         if directory is None:
-            self.directory = tempfile.mkdtemp('', 'tmp', self.temporary_directory)
+            self.directory = tempfile.mkdtemp('', 'tmp', TEMPORARY_DIRECTORY)
             self.rmdir = True
         else:
             self.directory = directory
             self.rmdir = False
+
+        print 'Working in %s' % self.directory
 
         # Environment variables that we will use when we call cscripts
         self.variables = {}
@@ -224,7 +223,6 @@ class Target(object):
     def build_dependencies(self, project):
         cwd = os.getcwd()
         if 'dependencies' in project.cscript:
-            print project.cscript['dependencies'](self)
             for d in project.cscript['dependencies'](self):
                 log('Building dependency %s %s of %s' % (d[0], d[1], project.name))
                 dep = Project(d[0], '.', d[1])
@@ -246,7 +244,6 @@ class Target(object):
 
     def build(self, project, options=None):
         variables = copy.copy(self.variables)
-        print 'Target %s builds %s with %s' % (self.platform, project.name, self.variables)
         if len(inspect.getargspec(project.cscript['build']).args) == 2:
             project.cscript['build'](self, options)
         else:
@@ -266,7 +263,6 @@ class Target(object):
         project.cscript['test'](self)
 
     def set(self, a, b):
-        print "Target set %s=%s" % (a, b)
         self.variables[a] = b
 
     def unset(self, a):
@@ -299,7 +295,6 @@ class Target(object):
 
 class WindowsTarget(Target):
     def __init__(self, bits, directory=None):
-        self.temporary_directory = '/tmp'
         super(WindowsTarget, self).__init__('windows', 2, directory)
         self.bits = bits
 
@@ -316,26 +311,20 @@ class WindowsTarget(Target):
         self.mingw_prefixes = ['/%s/%d' % (config.get('mingw_prefix'), self.bits), '%s/%d/%s-w64-mingw32' % (config.get('mingw_prefix'), bits, self.mingw_name)]
 
         self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.windows_prefix)
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.work_dir_cscript(), self.work_dir_cscript()))
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '%s/bin:%s:%s' % (self.windows_prefix, mingw_path, os.environ['PATH']))
         self.set('CC', '%s-w64-mingw32-gcc' % self.mingw_name)
         self.set('CXX', '%s-w64-mingw32-g++' % self.mingw_name)
         self.set('LD', '%s-w64-mingw32-ld' % self.mingw_name)
         self.set('RANLIB', '%s-w64-mingw32-ranlib' % self.mingw_name)
         self.set('WINRC', '%s-w64-mingw32-windres' % self.mingw_name)
-        cxx = '-I%s/include -I%s/include' % (self.windows_prefix, self.work_dir_cscript())
-        link = '-L%s/lib -L%s/lib' % (self.windows_prefix, self.work_dir_cscript())
+        cxx = '-I%s/include -I%s/include' % (self.windows_prefix, self.directory)
+        link = '-L%s/lib -L%s/lib' % (self.windows_prefix, self.directory)
         for p in self.mingw_prefixes:
             cxx += ' -I%s/include' % p
             link += ' -L%s/lib' % p
         self.set('CXXFLAGS', '"%s"' % cxx)
         self.set('LINKFLAGS', '"%s"' % link)
-
-    def work_dir_cdist(self):
-        return '%s/%d' % (self.directory, self.bits)
-
-    def work_dir_cscript(self):
-        return '%s/%d' % (self.directory, self.bits)
 
     def command(self, c):
         log('host -> %s' % c)
@@ -347,7 +336,6 @@ class WindowsTarget(Target):
 
 class LinuxTarget(Target):
     def __init__(self, distro, version, bits, directory=None):
-        self.temporary_directory = '/tmp'
         super(LinuxTarget, self).__init__('linux', 2, directory)
         self.distro = distro
         self.version = version
@@ -356,34 +344,14 @@ class LinuxTarget(Target):
         self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
         # e.g. /home/carl/Environments/ubuntu-14.04-64
         self.chroot_prefix = '%s/%s' % (config.get('linux_chroot_prefix'), self.chroot)
-        # e.g. /home/carl/Test/frobozz
-        if config.get('chroot_host_mounted'):
-            self.dir_in_chroot = self.directory
-        else:
-            self.dir_in_chroot = remove_prefix(self.directory, self.chroot_prefix)
 
-        self.set('CXXFLAGS', '-I%s/include' % self.work_dir_cscript())
-        self.set('LINKFLAGS', '-L%s/lib' % self.work_dir_cscript())
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:/usr/local/lib/pkgconfig' % self.work_dir_cscript())
+        self.set('CXXFLAGS', '-I%s/include' % self.directory)
+        self.set('LINKFLAGS', '-L%s/lib' % self.directory)
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:/usr/local/lib/pkgconfig' % self.directory)
         self.set('PATH', '%s:/usr/local/bin' % (os.environ['PATH']))
 
-    def work_dir_cdist(self):
-        if config.get('chroot_host_mounted'):
-            return self.work_dir_cscript()
-        else:
-            return '%s%s' % (self.chroot_prefix, self.dir_in_chroot)
-
-    def work_dir_cscript(self):
-        return self.dir_in_chroot
-
     def command(self, c):
-        if config.get('chroot_host_mounted'):
-            command('%s schroot -c %s -p -- %s' % (self.variables_string(), self.chroot, c))
-        else:
-            # Work out the cwd for the chrooted command
-            cwd = remove_prefix(os.getcwd(), self.chroot_prefix)
-            log('schroot [%s] -> %s' % (cwd, c))
-            command('%s schroot -c %s -d %s -p -- %s' % (self.variables_string(), self.chroot, cwd, c))
+        command('%s schroot -c %s -p -- %s' % (self.variables_string(), self.chroot, c))
 
 #
 # OS X
@@ -391,7 +359,6 @@ class LinuxTarget(Target):
 
 class OSXTarget(Target):
     def __init__(self, directory=None):
-        self.temporary_directory = '/tmp'
         super(OSXTarget, self).__init__('osx', 4, directory)
 
     def command(self, c):
@@ -412,19 +379,13 @@ class OSXSingleTarget(OSXTarget):
         enviro = '%s/%d' % (config.get('osx_environment_prefix'), bits)
 
         # Environment variables
-        self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (self.work_dir_cscript(), enviro, flags))
-        self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (self.work_dir_cscript(), enviro, flags))
-        self.set('LDFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.work_dir_cscript(), enviro, flags))
-        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.work_dir_cscript(), enviro, flags))
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig:/usr/lib/pkgconfig' % (self.work_dir_cscript(), enviro))
+        self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, enviro, flags))
+        self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, enviro, flags))
+        self.set('LDFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, enviro, flags))
+        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, enviro, flags))
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig:/usr/lib/pkgconfig' % (self.directory, enviro))
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
         self.set('MACOSX_DEPLOYMENT_TARGET', config.get('osx_sdk'))
-
-    def work_dir_cdist(self):
-        return self.work_dir_cscript()
-
-    def work_dir_cscript(self):
-        return '%s/%d' % (self.directory, self.bits)
 
     def package(self, project):
         raise Error('cannot package non-universal OS X versions')
@@ -436,9 +397,6 @@ class OSXUniversalTarget(OSXTarget):
         self.parts = []
         self.parts.append(OSXSingleTarget(32, directory))
         self.parts.append(OSXSingleTarget(64, directory))
-
-    def work_dir_cscript(self):
-        return self.dir_in_host
 
     def package(self, project):
         for p in self.parts:
@@ -455,15 +413,8 @@ class OSXUniversalTarget(OSXTarget):
 
 class SourceTarget(Target):
     def __init__(self):
-        self.temporary_directory = '/tmp'
         super(SourceTarget, self).__init__('source', 2)
         self.directory = tempfile.mkdtemp()
-
-    def work_dir_cdist(self):
-        return self.directory
-
-    def work_dir_cscript(self):
-        return self.directory
 
     def command(self, c):
         log('host -> %s' % c)
@@ -533,15 +484,15 @@ class Project(object):
         if args.quiet:
             flags = '-q'
             redirect = '>/dev/null'
-        command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.work_dir_cdist(), self.name))
-        os.chdir('%s/src/%s' % (target.work_dir_cdist(), self.name))
+        command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.directory, self.name))
+        os.chdir('%s/src/%s' % (target.directory, self.name))
         command('git checkout %s %s %s' % (flags, self.specifier, redirect))
         self.git_commit = command_and_read('git rev-parse --short=7 HEAD').readline().strip()
         command('git submodule init --quiet')
         command('git submodule update --quiet')
         os.chdir(self.directory)
 
-        proj = '%s/src/%s/%s' % (target.work_dir_cdist(), self.name, self.directory)
+        proj = '%s/src/%s/%s' % (target.directory, self.name, self.directory)
 
         self.read_cscript('%s/cscript' % proj)
         
