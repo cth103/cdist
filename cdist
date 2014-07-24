@@ -395,8 +395,8 @@ class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
         self.parts = []
-        self.parts.append(OSXSingleTarget(32, directory))
-        self.parts.append(OSXSingleTarget(64, directory))
+        self.parts.append(OSXSingleTarget(32, os.path.join(self.directory, '32')))
+        self.parts.append(OSXSingleTarget(64, os.path.join(self.directory, '64')))
 
     def package(self, project):
         for p in self.parts:
@@ -414,7 +414,6 @@ class OSXUniversalTarget(OSXTarget):
 class SourceTarget(Target):
     def __init__(self):
         super(SourceTarget, self).__init__('source', 2)
-        self.directory = tempfile.mkdtemp()
 
     def command(self, c):
         log('host -> %s' % c)
