@@ -214,8 +214,6 @@ class Target(object):
             self.directory = directory
             self.rmdir = False
 
-        print 'Working in %s' % self.directory
-
         # Environment variables that we will use when we call cscripts
         self.variables = {}
         self.debug = False
