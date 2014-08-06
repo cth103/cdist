@@ -558,6 +558,7 @@ parser.add_argument('-p', '--project', help='project name')
 parser.add_argument('-d', '--directory', help='directory within project repo', default='.')
 parser.add_argument('--minor', help='minor version number bump', action='store_true')
 parser.add_argument('--micro', help='micro version number bump', action='store_true')
+parser.add_argument('--major', help='major version to return with latest', type=int)
 parser.add_argument('-c', '--checkout', help='string to pass to git for checkout')
 parser.add_argument('-o', '--output', help='output directory', default='.')
 parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
@@ -724,17 +725,20 @@ elif args.command == 'latest':
     project.checkout(target)
 
     f = command_and_read('git log --tags --simplify-by-decoration --pretty="%d"')
-    t = f.readline()
-    m = re.compile(".*\((.*)\).*").match(t)
     latest = None
-    if m:
-        tags = m.group(1).split(', ')
-        for t in tags:
-            s = t.split()
-            if len(s) > 1:
-                t = s[1]
-            if len(t) > 0 and t[0] == 'v':
-                latest = t[1:]
+    while latest is None:
+        t = f.readline()
+        m = re.compile(".*\((.*)\).*").match(t)
+        if m:
+            tags = m.group(1).split(', ')
+            for t in tags:
+                s = t.split()
+                if len(s) > 1:
+                    t = s[1]
+                if len(t) > 0 and t[0] == 'v':
+                    v = Version(t[1:])
+                    if args.major is None or v.major == args.major:
+                        latest = v
 
     print latest
     target.cleanup()
