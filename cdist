@@ -346,6 +346,7 @@ class LinuxTarget(Target):
         self.chroot_prefix = '%s/%s' % (config.get('linux_chroot_prefix'), self.chroot)
 
         self.set('CXXFLAGS', '-I%s/include' % self.directory)
+        self.set('CPPFLAGS', '')
         self.set('LINKFLAGS', '-L%s/lib' % self.directory)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:/usr/local/lib/pkgconfig' % self.directory)
         self.set('PATH', '%s:/usr/local/bin' % (os.environ['PATH']))
@@ -380,6 +381,7 @@ class OSXSingleTarget(OSXTarget):
 
         # Environment variables
         self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, enviro, flags))
+        self.set('CPPFLAGS', '')
         self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, enviro, flags))
         self.set('LDFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, enviro, flags))
         self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, enviro, flags))
