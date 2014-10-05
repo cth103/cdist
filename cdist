@@ -322,6 +322,7 @@ class WindowsTarget(Target):
             cxx += ' -I%s/include' % p
             link += ' -L%s/lib' % p
         self.set('CXXFLAGS', '"%s"' % cxx)
+        self.set('CPPFLAGS', '')
         self.set('LINKFLAGS', '"%s"' % link)
 
     def command(self, c):
