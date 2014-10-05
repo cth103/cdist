@@ -43,9 +43,9 @@ class Error(Exception):
 #
 
 class Option(object):
-    def __init__(self, key):
+    def __init__(self, key, default=None):
         self.key = key
-        self.value = None
+        self.value = default
 
     def offer(self, key, value):
         if key == self.key:
@@ -69,7 +69,8 @@ class Config:
                          Option('osx_build_host'),
                          Option('osx_environment_prefix'),
                          Option('osx_sdk_prefix'),
-                         Option('osx_sdk') ]
+                         Option('osx_sdk'),
+                         Option('parallel', 4) ]
 
         try:
             f = open('%s/.config/cdist' % os.path.expanduser('~'), 'r')
@@ -203,9 +204,9 @@ class Version:
 class Target(object):
     # @param directory directory to work in; if None we will use a temporary directory
     # Temporary directories will be removed after use; specified directories will not
-    def __init__(self, platform, parallel, directory=None):
+    def __init__(self, platform, directory=None):
         self.platform = platform
-        self.parallel = parallel
+        self.parallel = int(config.get('parallel'))
 
         if directory is None:
             self.directory = tempfile.mkdtemp('', 'tmp', TEMPORARY_DIRECTORY)
@@ -293,7 +294,7 @@ class Target(object):
 
 class WindowsTarget(Target):
     def __init__(self, bits, directory=None):
-        super(WindowsTarget, self).__init__('windows', 2, directory)
+        super(WindowsTarget, self).__init__('windows', directory)
         self.bits = bits
 
         self.windows_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
@@ -334,7 +335,7 @@ class WindowsTarget(Target):
 
 class LinuxTarget(Target):
     def __init__(self, distro, version, bits, directory=None):
-        super(LinuxTarget, self).__init__('linux', 2, directory)
+        super(LinuxTarget, self).__init__('linux', directory)
         self.distro = distro
         self.version = version
         self.bits = bits
@@ -357,7 +358,7 @@ class LinuxTarget(Target):
 
 class OSXTarget(Target):
     def __init__(self, directory=None):
-        super(OSXTarget, self).__init__('osx', 4, directory)
+        super(OSXTarget, self).__init__('osx', directory)
 
     def command(self, c):
         command('%s %s' % (self.variables_string(False), c))
@@ -411,7 +412,7 @@ class OSXUniversalTarget(OSXTarget):
 
 class SourceTarget(Target):
     def __init__(self):
-        super(SourceTarget, self).__init__('source', 2)
+        super(SourceTarget, self).__init__('source')
 
     def command(self, c):
         log('host -> %s' % c)
