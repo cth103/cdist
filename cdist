@@ -30,9 +30,11 @@ import inspect
 
 TEMPORARY_DIRECTORY = '/tmp'
 
-# Globals
-quiet = False
-command = None
+class Globals:
+    quiet = False
+    command = None
+
+globals = Globals()
 
 class Error(Exception):
     def __init__(self, value):
@@ -107,7 +109,7 @@ config = Config()
 # 
 
 def log(m):
-    if not quiet:
+    if not globals.quiet:
         print '\x1b[33m* %s\x1b[0m' % m
 
 def copytree(a, b):
@@ -456,7 +458,7 @@ def target_factory(s, debug, work):
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
-        if command == 'build':
+        if globals.command == 'build':
             target = OSXSingleTarget(64, work)
         else:
             target = OSXUniversalTarget(work)
@@ -486,7 +488,7 @@ class Project(object):
     def checkout(self, target):
         flags = ''
         redirect = ''
-        if quiet:
+        if globals.quiet:
             flags = '-q'
             redirect = '>/dev/null'
         command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.directory, self.name))
@@ -585,19 +587,19 @@ def main():
     if args.project is None and args.command != 'shell':
         raise Error('you must specify -p or --project')
         
-    quiet = args.quiet
-    command = args.command
+    globals.quiet = args.quiet
+    globals.command = args.command
 
     project = Project(args.project, args.directory, args.checkout)
 
     commands = ['build', 'package', 'release', 'pot', 'changelog', 'manual', 'doxygen', 'latest', 'test', 'shell', 'revision']
-    if command not in commands:
+    if globals.command not in commands:
         e = 'command must be one of: '
         for c in commands:
             e += '%s ' % c
         raise Error(e)
 
-    if command == 'build':
+    if globals.command == 'build':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
@@ -608,7 +610,7 @@ def main():
         if not args.keep:
             target.cleanup()
 
-    elif command == 'package':
+    elif globals.command == 'package':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
@@ -633,7 +635,7 @@ def main():
         if not args.keep:
             target.cleanup()
 
-    elif command == 'release':
+    elif globals.command == 'release':
         if args.minor is False and args.micro is False:
             raise Error('you must specify --minor or --micro')
 
@@ -662,7 +664,7 @@ def main():
 
         target.cleanup()
 
-    elif command == 'pot':
+    elif globals.command == 'pot':
         target = SourceTarget()
         project.checkout(target)
 
@@ -672,7 +674,7 @@ def main():
 
         target.cleanup()
 
-    elif command == 'changelog':
+    elif globals.command == 'changelog':
         target = SourceTarget()
         project.checkout(target)
 
@@ -714,7 +716,7 @@ def main():
 
         target.cleanup()
 
-    elif command == 'manual':
+    elif globals.command == 'manual':
         target = SourceTarget()
         project.checkout(target)
 
@@ -727,7 +729,7 @@ def main():
 
         target.cleanup()
 
-    elif command == 'doxygen':
+    elif globals.command == 'doxygen':
         target = SourceTarget()
         project.checkout(target)
 
@@ -740,7 +742,7 @@ def main():
 
         target.cleanup()
 
-    elif command == 'latest':
+    elif globals.command == 'latest':
         target = SourceTarget()
         project.checkout(target)
 
@@ -763,7 +765,7 @@ def main():
         print latest
         target.cleanup()
 
-    elif command == 'test':
+    elif globals.command == 'test':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
@@ -779,14 +781,14 @@ def main():
         if target is not None:
             target.cleanup()
 
-    elif command == 'shell':
+    elif globals.command == 'shell':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
         target = target_factory(args.target, args.debug, args.work)
         target.command('bash')
 
-    elif command == 'revision':
+    elif globals.command == 'revision':
 
         target = SourceTarget()
         project.checkout(target)
@@ -794,7 +796,7 @@ def main():
         target.cleanup()
 
     else:
-        raise Error('invalid command %s' % command)
+        raise Error('invalid command %s' % globals.command)
 
 try:
     main()
