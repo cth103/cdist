@@ -456,7 +456,7 @@ def target_factory(s, debug, work):
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
-        if args.command == 'build':
+        if command == 'build':
             target = OSXSingleTarget(64, work)
         else:
             target = OSXUniversalTarget(work)
