@@ -34,7 +34,7 @@ class Error(Exception):
     def __init__(self, value):
         self.value = value
     def __str__(self):
-        return '\x1b[31m%s\x1b[0m' % repr(self.value)
+        return self.value
     def __repr__(self):
         return str(self)
 
@@ -552,230 +552,238 @@ def devel_to_git(project, filename):
         filename = filename.replace('devel', '-%s' % project.git_commit)
     return filename
 
+
 #
 # Command-line parser
 #
 
-parser = argparse.ArgumentParser()
-parser.add_argument('command')
-parser.add_argument('-p', '--project', help='project name')
-parser.add_argument('-d', '--directory', help='directory within project repo', default='.')
-parser.add_argument('--minor', help='minor version number bump', action='store_true')
-parser.add_argument('--micro', help='micro version number bump', action='store_true')
-parser.add_argument('--major', help='major version to return with latest', type=int)
-parser.add_argument('-c', '--checkout', help='string to pass to git for checkout')
-parser.add_argument('-o', '--output', help='output directory', default='.')
-parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
-parser.add_argument('-t', '--target', help='target')
-parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
-parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
-parser.add_argument('-w', '--work', help='override default work directory')
-args = parser.parse_args()
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('command')
+    parser.add_argument('-p', '--project', help='project name')
+    parser.add_argument('-d', '--directory', help='directory within project repo', default='.')
+    parser.add_argument('--minor', help='minor version number bump', action='store_true')
+    parser.add_argument('--micro', help='micro version number bump', action='store_true')
+    parser.add_argument('--major', help='major version to return with latest', type=int)
+    parser.add_argument('-c', '--checkout', help='string to pass to git for checkout')
+    parser.add_argument('-o', '--output', help='output directory', default='.')
+    parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
+    parser.add_argument('-t', '--target', help='target')
+    parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
+    parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
+    parser.add_argument('-w', '--work', help='override default work directory')
+    args = parser.parse_args()
 
-args.output = os.path.abspath(args.output)
-if args.work is not None:
-    args.work = os.path.abspath(args.work)
+    args.output = os.path.abspath(args.output)
+    if args.work is not None:
+        args.work = os.path.abspath(args.work)
 
-if args.project is None and args.command != 'shell':
-    raise Error('you must specify -p or --project')
+    if args.project is None and args.command != 'shell':
+        raise Error('you must specify -p or --project')
 
-project = Project(args.project, args.directory, args.checkout)
+    project = Project(args.project, args.directory, args.checkout)
 
-if args.command == 'build':
-    if args.target is None:
-        raise Error('you must specify -t or --target')
+    if args.command == 'build':
+        if args.target is None:
+            raise Error('you must specify -t or --target')
 
-    target = target_factory(args.target, args.debug, args.work)
-    project.checkout(target)
-    target.build_dependencies(project)
-    target.build(project)
-    if not args.keep:
-        target.cleanup()
-
-elif args.command == 'package':
-    if args.target is None:
-        raise Error('you must specify -t or --target')
-        
-    target = target_factory(args.target, args.debug, args.work)
-
-    packages = target.package(project)
-    if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
-        packages = [packages]
-
-    if target.platform == 'linux':
-        out = '%s/%s-%s-%d' % (args.output, target.distro, target.version, target.bits)
-        try:
-            os.makedirs(out)
-        except:
-            pass
-        for p in packages:
-            copyfile(p, '%s/%s' % (out, os.path.basename(devel_to_git(project, p))))
-    else:
-        for p in packages:
-            copyfile(p, '%s/%s' % (args.output, os.path.basename(devel_to_git(project, p))))
-
-    if not args.keep:
-        target.cleanup()
-
-elif args.command == 'release':
-    if args.minor is False and args.micro is False:
-        raise Error('you must specify --minor or --micro')
-
-    target = SourceTarget()
-    project.checkout(target)
-
-    version = project.version
-    version.to_release()
-    if args.minor:
-        version.bump_minor()
-    else:
-        version.bump_micro()
-
-    set_version_in_wscript(version)
-    append_version_to_changelog(version)
-    append_version_to_debian_changelog(version)
-
-    command('git commit -a -m "Bump version"')
-    command('git tag -m "v%s" v%s' % (version, version))
-
-    version.to_devel()
-    set_version_in_wscript(version)
-    command('git commit -a -m "Bump version"')
-    command('git push')
-    command('git push --tags')
-
-    target.cleanup()
-
-elif args.command == 'pot':
-    target = SourceTarget()
-    project.checkout(target)
-
-    pots = project.cscript['make_pot'](target)
-    for p in pots:
-        copyfile(p, '%s/%s' % (args.output, os.path.basename(p)))
-
-    target.cleanup()
-
-elif args.command == 'changelog':
-    target = SourceTarget()
-    project.checkout(target)
-
-    text = open('ChangeLog', 'r')
-    html = open('%s/changelog.html' % args.output, 'w')
-    versions = 8
-    
-    last = None
-    changes = []
-    
-    while 1:
-        l = text.readline()
-        if l == '':
-            break
-    
-        if len(l) > 0 and l[0] == "\t":
-            s = l.split()
-            if len(s) == 4 and s[1] == "Version" and s[3] == "released.":
-                v = Version(s[2])
-                if v.micro == 0:
-                    if last is not None and len(changes) > 0:
-                        print >>html,"<h2>Changes between version %s and %s</h2>" % (s[2], last)
-                        print >>html,"<ul>"
-                        for c in changes:
-                            print >>html,"<li>%s" % c
-                        print >>html,"</ul>"
-                    last = s[2]
-                    changes = []
-                    versions -= 1
-                    if versions < 0:
-                        break
-            else:
-                c = l.strip()
-                if len(c) > 0:
-                    if c[0] == '*':
-                        changes.append(c[2:])
-                    else:
-                        changes[-1] += " " + c
-
-    target.cleanup()
-
-elif args.command == 'manual':
-    target = SourceTarget()
-    project.checkout(target)
-
-    outs = project.cscript['make_manual'](target)
-    for o in outs:
-        if os.path.isfile(o):
-            copyfile(o, '%s/%s' % (args.output, os.path.basename(o)))
-        else:
-            copytree(o, '%s/%s' % (args.output, os.path.basename(o)))
-
-    target.cleanup()
-
-elif args.command == 'doxygen':
-    target = SourceTarget()
-    project.checkout(target)
-
-    dirs = project.cscript['make_doxygen'](target)
-    if hasattr(dirs, 'strip') or (not hasattr(dirs, '__getitem__') and not hasattr(dirs, '__iter__')):
-        dirs = [dirs]
-
-    for d in dirs:
-        copytree(d, '%s/%s' % (args.output, 'doc'))
-
-    target.cleanup()
-
-elif args.command == 'latest':
-    target = SourceTarget()
-    project.checkout(target)
-
-    f = command_and_read('git log --tags --simplify-by-decoration --pretty="%d"')
-    latest = None
-    while latest is None:
-        t = f.readline()
-        m = re.compile(".*\((.*)\).*").match(t)
-        if m:
-            tags = m.group(1).split(', ')
-            for t in tags:
-                s = t.split()
-                if len(s) > 1:
-                    t = s[1]
-                if len(t) > 0 and t[0] == 'v':
-                    v = Version(t[1:])
-                    if args.major is None or v.major == args.major:
-                        latest = v
-
-    print latest
-    target.cleanup()
-
-elif args.command == 'test':
-    if args.target is None:
-        raise Error('you must specify -t or --target')
-
-    target = None
-    try:
         target = target_factory(args.target, args.debug, args.work)
-        target.test(project)
-    except Error as e:
+        project.checkout(target)
+        target.build_dependencies(project)
+        target.build(project)
+        if not args.keep:
+            target.cleanup()
+
+    elif args.command == 'package':
+        if args.target is None:
+            raise Error('you must specify -t or --target')
+
+        target = target_factory(args.target, args.debug, args.work)
+
+        packages = target.package(project)
+        if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
+            packages = [packages]
+
+        if target.platform == 'linux':
+            out = '%s/%s-%s-%d' % (args.output, target.distro, target.version, target.bits)
+            try:
+                os.makedirs(out)
+            except:
+                pass
+            for p in packages:
+                copyfile(p, '%s/%s' % (out, os.path.basename(devel_to_git(project, p))))
+        else:
+            for p in packages:
+                copyfile(p, '%s/%s' % (args.output, os.path.basename(devel_to_git(project, p))))
+
+        if not args.keep:
+            target.cleanup()
+
+    elif args.command == 'release':
+        if args.minor is False and args.micro is False:
+            raise Error('you must specify --minor or --micro')
+
+        target = SourceTarget()
+        project.checkout(target)
+
+        version = project.version
+        version.to_release()
+        if args.minor:
+            version.bump_minor()
+        else:
+            version.bump_micro()
+
+        set_version_in_wscript(version)
+        append_version_to_changelog(version)
+        append_version_to_debian_changelog(version)
+
+        command('git commit -a -m "Bump version"')
+        command('git tag -m "v%s" v%s' % (version, version))
+
+        version.to_devel()
+        set_version_in_wscript(version)
+        command('git commit -a -m "Bump version"')
+        command('git push')
+        command('git push --tags')
+
+        target.cleanup()
+
+    elif args.command == 'pot':
+        target = SourceTarget()
+        project.checkout(target)
+
+        pots = project.cscript['make_pot'](target)
+        for p in pots:
+            copyfile(p, '%s/%s' % (args.output, os.path.basename(p)))
+
+        target.cleanup()
+
+    elif args.command == 'changelog':
+        target = SourceTarget()
+        project.checkout(target)
+
+        text = open('ChangeLog', 'r')
+        html = open('%s/changelog.html' % args.output, 'w')
+        versions = 8
+
+        last = None
+        changes = []
+
+        while 1:
+            l = text.readline()
+            if l == '':
+                break
+
+            if len(l) > 0 and l[0] == "\t":
+                s = l.split()
+                if len(s) == 4 and s[1] == "Version" and s[3] == "released.":
+                    v = Version(s[2])
+                    if v.micro == 0:
+                        if last is not None and len(changes) > 0:
+                            print >>html,"<h2>Changes between version %s and %s</h2>" % (s[2], last)
+                            print >>html,"<ul>"
+                            for c in changes:
+                                print >>html,"<li>%s" % c
+                            print >>html,"</ul>"
+                        last = s[2]
+                        changes = []
+                        versions -= 1
+                        if versions < 0:
+                            break
+                else:
+                    c = l.strip()
+                    if len(c) > 0:
+                        if c[0] == '*':
+                            changes.append(c[2:])
+                        else:
+                            changes[-1] += " " + c
+
+        target.cleanup()
+
+    elif args.command == 'manual':
+        target = SourceTarget()
+        project.checkout(target)
+
+        outs = project.cscript['make_manual'](target)
+        for o in outs:
+            if os.path.isfile(o):
+                copyfile(o, '%s/%s' % (args.output, os.path.basename(o)))
+            else:
+                copytree(o, '%s/%s' % (args.output, os.path.basename(o)))
+
+        target.cleanup()
+
+    elif args.command == 'doxygen':
+        target = SourceTarget()
+        project.checkout(target)
+
+        dirs = project.cscript['make_doxygen'](target)
+        if hasattr(dirs, 'strip') or (not hasattr(dirs, '__getitem__') and not hasattr(dirs, '__iter__')):
+            dirs = [dirs]
+
+        for d in dirs:
+            copytree(d, '%s/%s' % (args.output, 'doc'))
+
+        target.cleanup()
+
+    elif args.command == 'latest':
+        target = SourceTarget()
+        project.checkout(target)
+
+        f = command_and_read('git log --tags --simplify-by-decoration --pretty="%d"')
+        latest = None
+        while latest is None:
+            t = f.readline()
+            m = re.compile(".*\((.*)\).*").match(t)
+            if m:
+                tags = m.group(1).split(', ')
+                for t in tags:
+                    s = t.split()
+                    if len(s) > 1:
+                        t = s[1]
+                    if len(t) > 0 and t[0] == 'v':
+                        v = Version(t[1:])
+                        if args.major is None or v.major == args.major:
+                            latest = v
+
+        print latest
+        target.cleanup()
+
+    elif args.command == 'test':
+        if args.target is None:
+            raise Error('you must specify -t or --target')
+
+        target = None
+        try:
+            target = target_factory(args.target, args.debug, args.work)
+            target.test(project)
+        except Error as e:
+            if target is not None:
+                target.cleanup()
+            raise
+
         if target is not None:
             target.cleanup()
-        raise
-        
-    if target is not None:
+
+    elif args.command == 'shell':
+        if args.target is None:
+            raise Error('you must specify -t or --target')
+
+        target = target_factory(args.target, args.debug, args.work)
+        target.command('bash')
+
+    elif args.command == 'revision':
+
+        target = SourceTarget()
+        project.checkout(target)
+        print command_and_read('git rev-parse HEAD').readline().strip()[:7]
         target.cleanup()
 
-elif args.command == 'shell':
-    if args.target is None:
-        raise Error('you must specify -t or --target')
+    else:
+        raise Error('invalid command %s' % args.command)
 
-    target = target_factory(args.target, args.debug, args.work)
-    target.command('bash')
-
-elif args.command == 'revision':
-
-    target = SourceTarget()
-    project.checkout(target)
-    print command_and_read('git rev-parse HEAD').readline().strip()[:7]
-    target.cleanup()
-
-else:
-    raise Error('invalid command %s' % args.command)
+try:
+    main()
+except Error as e:
+    print >>sys.stderr,'cdist: %s' % str(e)
+    sys.exit(1)
