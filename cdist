@@ -770,5 +770,12 @@ elif args.command == 'shell':
     target = target_factory(args.target, args.debug, args.work)
     target.command('bash')
 
+elif args.command == 'revision':
+
+    target = SourceTarget()
+    project.checkout(target)
+    print command_and_read('git rev-parse HEAD').readline().strip()[:7]
+    target.cleanup()
+
 else:
     raise Error('invalid command %s' % args.command)
