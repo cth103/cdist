@@ -564,8 +564,29 @@ def devel_to_git(project, filename):
 #
 
 def main():
+
+    commands = {
+        "build": "build project",
+        "package": "package and build project",
+        "release": "release a project using its next version number (changing wscript and tagging)",
+        "pot": "build the project's .pot files",
+        "changelog": "generate a simple HTML changelog",
+        "manual": "build the project's manual",
+        "doxygen": "build the project's Doxygen documentation",
+        "latest": "print out the latest version",
+        "test": "run the project's unit tests",
+        "shell": "build the project then start a shell in its chroot",
+        "revision": "print the head git revision number"
+    }
+
+    one_of = "Command is one of:\n"
+    summary = ""
+    for k, v in commands.iteritems():
+        one_of += "\t%s\t%s\n" % (k, v)
+        summary += k + " "
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('command')
+    parser.add_argument('command', help=summary)
     parser.add_argument('-p', '--project', help='project name')
     parser.add_argument('-d', '--directory', help='directory within project repo', default='.')
     parser.add_argument('--minor', help='minor version number bump', action='store_true')
@@ -592,12 +613,9 @@ def main():
 
     project = Project(args.project, args.directory, args.checkout)
 
-    commands = ['build', 'package', 'release', 'pot', 'changelog', 'manual', 'doxygen', 'latest', 'test', 'shell', 'revision']
-    if globals.command not in commands:
-        e = 'command must be one of: '
-        for c in commands:
-            e += '%s ' % c
-        raise Error(e)
+    if not globals.command in commands:
+        e = 'command must be one of:\n' + one_of
+        raise Error('command must be one of:\n%s' % one_of)
 
     if globals.command == 'build':
         if args.target is None:
