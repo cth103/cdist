@@ -583,6 +583,13 @@ def main():
 
     project = Project(args.project, args.directory, args.checkout)
 
+    commands = ['build', 'package', 'release', 'pot', 'changelog', 'manual', 'doxygen', 'latest', 'test', 'shell', 'revision']
+    if args.command not in commands:
+        e = 'command must be one of: '
+        for c in commands:
+            e += '%s ' % c
+        raise Error(e)
+
     if args.command == 'build':
         if args.target is None:
             raise Error('you must specify -t or --target')
