@@ -30,6 +30,10 @@ import inspect
 
 TEMPORARY_DIRECTORY = '/tmp'
 
+# Globals
+quiet = False
+command = None
+
 class Error(Exception):
     def __init__(self, value):
         self.value = value
@@ -103,7 +107,7 @@ config = Config()
 # 
 
 def log(m):
-    if not args.quiet:
+    if not quiet:
         print '\x1b[33m* %s\x1b[0m' % m
 
 def copytree(a, b):
@@ -482,7 +486,7 @@ class Project(object):
     def checkout(self, target):
         flags = ''
         redirect = ''
-        if args.quiet:
+        if quiet:
             flags = '-q'
             redirect = '>/dev/null'
         command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.directory, self.name))
@@ -558,6 +562,21 @@ def devel_to_git(project, filename):
 #
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('command')
+    parser.add_argument('-p', '--project', help='project name')
+    parser.add_argument('-d', '--directory', help='directory within project repo', default='.')
+    parser.add_argument('--minor', help='minor version number bump', action='store_true')
+    parser.add_argument('--micro', help='micro version number bump', action='store_true')
+    parser.add_argument('--major', help='major version to return with latest', type=int)
+    parser.add_argument('-c', '--checkout', help='string to pass to git for checkout')
+    parser.add_argument('-o', '--output', help='output directory', default='.')
+    parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
+    parser.add_argument('-t', '--target', help='target')
+    parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
+    parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
+    parser.add_argument('-w', '--work', help='override default work directory')
+    args = parser.parse_args()
 
     args.output = os.path.abspath(args.output)
     if args.work is not None:
@@ -565,17 +584,20 @@ def main():
 
     if args.project is None and args.command != 'shell':
         raise Error('you must specify -p or --project')
+        
+    quiet = args.quiet
+    command = args.command
 
     project = Project(args.project, args.directory, args.checkout)
 
     commands = ['build', 'package', 'release', 'pot', 'changelog', 'manual', 'doxygen', 'latest', 'test', 'shell', 'revision']
-    if args.command not in commands:
+    if command not in commands:
         e = 'command must be one of: '
         for c in commands:
             e += '%s ' % c
         raise Error(e)
 
-    if args.command == 'build':
+    if command == 'build':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
@@ -586,7 +608,7 @@ def main():
         if not args.keep:
             target.cleanup()
 
-    elif args.command == 'package':
+    elif command == 'package':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
@@ -611,7 +633,7 @@ def main():
         if not args.keep:
             target.cleanup()
 
-    elif args.command == 'release':
+    elif command == 'release':
         if args.minor is False and args.micro is False:
             raise Error('you must specify --minor or --micro')
 
@@ -640,7 +662,7 @@ def main():
 
         target.cleanup()
 
-    elif args.command == 'pot':
+    elif command == 'pot':
         target = SourceTarget()
         project.checkout(target)
 
@@ -650,7 +672,7 @@ def main():
 
         target.cleanup()
 
-    elif args.command == 'changelog':
+    elif command == 'changelog':
         target = SourceTarget()
         project.checkout(target)
 
@@ -692,7 +714,7 @@ def main():
 
         target.cleanup()
 
-    elif args.command == 'manual':
+    elif command == 'manual':
         target = SourceTarget()
         project.checkout(target)
 
@@ -705,7 +727,7 @@ def main():
 
         target.cleanup()
 
-    elif args.command == 'doxygen':
+    elif command == 'doxygen':
         target = SourceTarget()
         project.checkout(target)
 
@@ -718,7 +740,7 @@ def main():
 
         target.cleanup()
 
-    elif args.command == 'latest':
+    elif command == 'latest':
         target = SourceTarget()
         project.checkout(target)
 
@@ -741,7 +763,7 @@ def main():
         print latest
         target.cleanup()
 
-    elif args.command == 'test':
+    elif command == 'test':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
@@ -757,14 +779,14 @@ def main():
         if target is not None:
             target.cleanup()
 
-    elif args.command == 'shell':
+    elif command == 'shell':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
         target = target_factory(args.target, args.debug, args.work)
         target.command('bash')
 
-    elif args.command == 'revision':
+    elif command == 'revision':
 
         target = SourceTarget()
         project.checkout(target)
@@ -772,28 +794,7 @@ def main():
         target.cleanup()
 
     else:
-        raise Error('invalid command %s' % args.command)
-
-
-#
-# Command-line parser
-# 
-
-parser = argparse.ArgumentParser()
-parser.add_argument('command')
-parser.add_argument('-p', '--project', help='project name')
-parser.add_argument('-d', '--directory', help='directory within project repo', default='.')
-parser.add_argument('--minor', help='minor version number bump', action='store_true')
-parser.add_argument('--micro', help='micro version number bump', action='store_true')
-parser.add_argument('--major', help='major version to return with latest', type=int)
-parser.add_argument('-c', '--checkout', help='string to pass to git for checkout')
-parser.add_argument('-o', '--output', help='output directory', default='.')
-parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
-parser.add_argument('-t', '--target', help='target')
-parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
-parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
-parser.add_argument('-w', '--work', help='override default work directory')
-args = parser.parse_args()
+        raise Error('invalid command %s' % command)
 
 try:
     main()
