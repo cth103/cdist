@@ -603,7 +603,9 @@ def main():
 
     if args.output.find(':') == -1:
         # This isn't of the form host:path so make it absolute
-        args.output = os.path.abspath(args.output)
+        args.output = os.path.abspath(args.output) + '/'
+
+    # Now, args.output is 'host:' or 'path/'
 
     if args.work is not None:
         args.work = os.path.abspath(args.work)
@@ -642,7 +644,7 @@ def main():
             packages = [packages]
 
         if target.platform == 'linux':
-            out = '%s/%s-%s-%d' % (args.output, target.distro, target.version, target.bits)
+            out = '%s%s-%s-%d' % (args.output, target.distro, target.version, target.bits)
             try:
                 os.makedirs(out)
             except:
@@ -651,7 +653,7 @@ def main():
                 copyfile(p, '%s/%s' % (out, os.path.basename(devel_to_git(project, p))))
         else:
             for p in packages:
-                copyfile(p, '%s/%s' % (args.output, os.path.basename(devel_to_git(project, p))))
+                copyfile(p, '%s%s' % (args.output, os.path.basename(devel_to_git(project, p))))
 
         if not args.keep:
             target.cleanup()
@@ -691,7 +693,7 @@ def main():
 
         pots = project.cscript['make_pot'](target)
         for p in pots:
-            copyfile(p, '%s/%s' % (args.output, os.path.basename(p)))
+            copyfile(p, '%s%s' % (args.output, os.path.basename(p)))
 
         target.cleanup()
 
@@ -735,7 +737,7 @@ def main():
                         else:
                             changes[-1] += " " + c
 
-        copyfile(html.file, '%s/changelog.html' % args.output)
+        copyfile(html.file, '%schangelog.html' % args.output)
         html.close()
         target.cleanup()
 
@@ -746,9 +748,9 @@ def main():
         outs = project.cscript['make_manual'](target)
         for o in outs:
             if os.path.isfile(o):
-                copyfile(o, '%s/%s' % (args.output, os.path.basename(o)))
+                copyfile(o, '%s%s' % (args.output, os.path.basename(o)))
             else:
-                copytree(o, '%s/%s' % (args.output, os.path.basename(o)))
+                copytree(o, '%s%s' % (args.output, os.path.basename(o)))
 
         target.cleanup()
 
@@ -761,7 +763,7 @@ def main():
             dirs = [dirs]
 
         for d in dirs:
-            copytree(d, '%s/%s' % (args.output, 'doc'))
+            copytree(d, '%s%s' % (args.output, 'doc'))
 
         target.cleanup()
 
