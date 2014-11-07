@@ -114,11 +114,11 @@ def log(m):
 
 def copytree(a, b):
     log('copy %s -> %s' % (a, b))
-    os.system('scp -r %s %s' % (a, b))
+    os.system('scp -r "\'%s\'" "\'%s\'"' % (a, b))
 
 def copyfile(a, b):
     log('copy %s -> %s' % (a, b))
-    os.system('scp %s %s' % (a, b))
+    os.system('scp "\'%s\'" "\'%s\'"' % (a, b))
 
 def rmdir(a):
     log('remove %s' % a)
