@@ -112,13 +112,22 @@ def log(m):
     if not globals.quiet:
         print '\x1b[33m* %s\x1b[0m' % m
 
+def scp_escape(n):
+    s = n.split(':')
+    assert(len(s) == 1 or len(s) == 2)
+    if len(s) == 2:
+        s[1] = '"\'%s\'"' % s[1]
+        return '%s:%s' % (s[0], s[1])
+    else:
+        return n
+
 def copytree(a, b):
     log('copy %s -> %s' % (a, b))
-    os.system('scp -r "\'%s\'" "\'%s\'"' % (a, b))
+    os.system('scp -r "\'%s\'" "\'%s\'"' % (scp_escape(a), scp_escape(b)))
 
 def copyfile(a, b):
     log('copy %s -> %s' % (a, b))
-    os.system('scp "\'%s\'" "\'%s\'"' % (a, b))
+    os.system('scp "\'%s\'" "\'%s\'"' % (scp_escape(a), scp_escape(b)))
 
 def rmdir(a):
     log('remove %s' % a)
