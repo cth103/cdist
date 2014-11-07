@@ -80,7 +80,7 @@ class Config:
 
         try:
             f = open('%s/.config/cdist' % os.path.expanduser('~'), 'r')
-            while 1:
+            while True:
                 l = f.readline()
                 if l == '':
                     break
@@ -114,11 +114,11 @@ def log(m):
 
 def copytree(a, b):
     log('copy %s -> %s' % (a, b))
-    shutil.copytree(a, b)
+    os.command('scp -r %s %s' % (a, b))
 
 def copyfile(a, b):
     log('copy %s -> %s' % (a, b))
-    shutil.copyfile(a, b)
+    os.command('scp %s %s' % (a, b))
 
 def rmdir(a):
     log('remove %s' % a)
@@ -142,7 +142,7 @@ def command_and_read(c):
 
 def read_wscript_variable(directory, variable):
     f = open('%s/wscript' % directory, 'r')
-    while 1:
+    while True:
         l = f.readline()
         if l == '':
             break
@@ -515,7 +515,7 @@ class Project(object):
 def set_version_in_wscript(version):
     f = open('wscript', 'rw')
     o = open('wscript.tmp', 'w')
-    while 1:
+    while True:
         l = f.readline()
         if l == '':
             break
@@ -697,13 +697,13 @@ def main():
         project.checkout(target)
 
         text = open('ChangeLog', 'r')
-        html = open('%s/changelog.html' % args.output, 'w')
+        html = tempfile.NamedTemporaryFile()
         versions = 8
 
         last = None
         changes = []
 
-        while 1:
+        while True:
             l = text.readline()
             if l == '':
                 break
@@ -732,6 +732,8 @@ def main():
                         else:
                             changes[-1] += " " + c
 
+        copyfile(html.file, '%s/changelog.html' % args.output)
+        html.close()
         target.cleanup()
 
     elif globals.command == 'manual':
