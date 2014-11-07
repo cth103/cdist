@@ -601,7 +601,10 @@ def main():
     parser.add_argument('-w', '--work', help='override default work directory')
     args = parser.parse_args()
 
-    args.output = os.path.abspath(args.output)
+    if args.output.find(':') == -1:
+        # This isn't of the form host:path so make it absolute
+        args.output = os.path.abspath(args.output)
+
     if args.work is not None:
         args.work = os.path.abspath(args.work)
 
