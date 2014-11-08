@@ -122,11 +122,11 @@ def scp_escape(n):
         return n
 
 def copytree(a, b):
-    log('copy %s -> %s' % (a, b))
+    log('copy %s -> %s' % (scp_escape(b), scp_escape(b)))
     os.system('scp -r %s %s' % (scp_escape(a), scp_escape(b)))
 
 def copyfile(a, b):
-    log('copy %s -> %s' % (a, b))
+    log('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
     os.system('scp %s %s' % (scp_escape(a), scp_escape(b)))
 
 def rmdir(a):
