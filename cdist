@@ -612,8 +612,11 @@ def main():
     if args.output.find(':') == -1:
         # This isn't of the form host:path so make it absolute
         args.output = os.path.abspath(args.output) + '/'
+    else:
+        if args.output[-1] != ':' and args.output[-1] != '/':
+            args.output += '/'
 
-    # Now, args.output is 'host:' or 'path/'
+    # Now, args.output is 'host:', 'host:path/' or 'path/'
 
     if args.work is not None:
         args.work = os.path.abspath(args.work)
