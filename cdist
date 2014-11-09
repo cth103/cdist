@@ -128,6 +128,13 @@ def copyfile(a, b):
     log('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
     os.system('scp %s %s' % (scp_escape(a), scp_escape(b)))
 
+def makedirs(d):
+    if d.find(':') == -1:
+        os.makedirs(d)
+    else:
+        s = d.split(':')
+        os.system('ssh %s -- mkdir %s' % (s[0], s[1])
+
 def rmdir(a):
     log('remove %s' % a)
     os.rmdir(a)
@@ -657,7 +664,7 @@ def main():
         if target.platform == 'linux':
             out = '%s%s-%s-%d' % (args.output, target.distro, target.version, target.bits)
             try:
-                os.makedirs(out)
+                makedirs(out)
             except:
                 pass
             for p in packages:
