@@ -120,20 +120,24 @@ def scp_escape(n):
     else:
         return '\"%s\"' % s[0]
 
+def command(c):
+    if os.system(c) != 0:
+        raise Error('%s failed' % c)
+
 def copytree(a, b):
     log('copy %s -> %s' % (scp_escape(b), scp_escape(b)))
-    os.system('scp -r %s %s' % (scp_escape(a), scp_escape(b)))
+    command('scp -r %s %s' % (scp_escape(a), scp_escape(b)))
 
 def copyfile(a, b):
     log('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
-    os.system('scp %s %s' % (scp_escape(a), scp_escape(b)))
+    command('scp %s %s' % (scp_escape(a), scp_escape(b)))
 
 def makedirs(d):
     if d.find(':') == -1:
         os.makedirs(d)
     else:
         s = d.split(':')
-        os.system('ssh %s -- mkdir -p %s' % (s[0], s[1]))
+        command('ssh %s -- mkdir -p %s' % (s[0], s[1]))
 
 def rmdir(a):
     log('remove %s' % a)
