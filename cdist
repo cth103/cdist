@@ -284,7 +284,7 @@ class Target(object):
         project.checkout(self)
         self.build_dependencies(project)
         self.build(project)
-        project.cscript['test'](self)
+        return project.cscript['test'](self)
 
     def set(self, a, b):
         self.variables[a] = b
