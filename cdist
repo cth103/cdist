@@ -674,6 +674,10 @@ def main():
             for p in packages:
                 copyfile(p, '%s/%s' % (out, os.path.basename(devel_to_git(project, p))))
         else:
+            try:
+                makedirs(args.output)
+            except:
+                pass
             for p in packages:
                 copyfile(p, '%s%s' % (args.output, os.path.basename(devel_to_git(project, p))))
 
