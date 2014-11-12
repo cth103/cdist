@@ -120,10 +120,6 @@ def scp_escape(n):
     else:
         return '\"%s\"' % s[0]
 
-def command(c):
-    if os.system(c) != 0:
-        raise Error('%s failed' % c)
-
 def copytree(a, b):
     log('copy %s -> %s' % (scp_escape(b), scp_escape(b)))
     command('scp -r %s %s' % (scp_escape(a), scp_escape(b)))
@@ -147,10 +143,10 @@ def rmtree(a):
     log('remove %s' % a)
     shutil.rmtree(a, ignore_errors=True)
 
-def command(c, can_fail=False):
+def command(c):
     log(c)
     r = os.system(c)
-    if (r >> 8) and not can_fail:
+    if (r >> 8):
         raise Error('command %s failed' % c)
 
 def command_and_read(c):
@@ -284,7 +280,7 @@ class Target(object):
         project.checkout(self)
         self.build_dependencies(project)
         self.build(project)
-        return project.cscript['test'](self)
+        project.cscript['test'](self)
 
     def set(self, a, b):
         self.variables[a] = b
