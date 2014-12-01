@@ -120,10 +120,6 @@ def scp_escape(n):
     else:
         return '\"%s\"' % s[0]
 
-def command(c):
-    if os.system(c) != 0:
-        raise Error('%s failed' % c)
-
 def copytree(a, b):
     log('copy %s -> %s' % (scp_escape(b), scp_escape(b)))
     command('scp -r %s %s' % (scp_escape(a), scp_escape(b)))
@@ -147,10 +143,10 @@ def rmtree(a):
     log('remove %s' % a)
     shutil.rmtree(a, ignore_errors=True)
 
-def command(c, can_fail=False):
+def command(c):
     log(c)
     r = os.system(c)
-    if (r >> 8) and not can_fail:
+    if (r >> 8):
         raise Error('command %s failed' % c)
 
 def command_and_read(c):
@@ -674,6 +670,10 @@ def main():
             for p in packages:
                 copyfile(p, '%s/%s' % (out, os.path.basename(devel_to_git(project, p))))
         else:
+            try:
+                makedirs(args.output)
+            except:
+                pass
             for p in packages:
                 copyfile(p, '%s%s' % (args.output, os.path.basename(devel_to_git(project, p))))
 
