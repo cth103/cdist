@@ -504,6 +504,7 @@ class Project(object):
 
     def __init__(self, name, specifier=None):
         self.name = name
+        self.version = version
         self.specifier = specifier
         self.git_commit = None
         if self.specifier is None:
@@ -524,11 +525,14 @@ class Project(object):
 
         proj = '%s/src/%s' % (target.directory, self.name)
 
-        self.read_cscript('%s/cscript' % proj)
-
-    def read_cscript(self, s):
         self.cscript = {}
-        execfile(s, self.cscript)
+        execfile('%s/cscript' % proj, self.cscript)
+
+        if os.path.exists('%s/wscript' % proj):
+            v = read_wscript_variable(proj, "VERSION");
+            if v is not None:
+                self.version = Version(v)
+
 
 def set_version_in_wscript(version):
     f = open('wscript', 'rw')
