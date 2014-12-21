@@ -223,12 +223,16 @@ class Version:
 #
 
 class Target(object):
-    # @param directory directory to work in; if None we will use a temporary directory
-    # Temporary directories will be removed after use; specified directories will not
+    """
+    platform -- platform string (e.g. 'windows', 'linux', 'osx')
+    directory -- directory to work in; if None we will use a temporary directory
+    Temporary directories will be removed after use; specified directories will not.
+    """
     def __init__(self, platform, directory=None):
         self.platform = platform
         self.parallel = int(config.get('parallel'))
 
+        # self.directory is the working directory
         if directory is None:
             self.directory = tempfile.mkdtemp('', 'tmp', TEMPORARY_DIRECTORY)
             self.rmdir = True
@@ -491,9 +495,15 @@ def target_factory(s, debug, work):
 #
  
 class Project(object):
+    """Description of a project.  This class is never exposed to cscripts.
+       Attributes:
+           name -- name of git repository (without the .git)
+           specifier -- git tag or revision to use
+           git_commit -- git revision that is actually being used
+    """
+
     def __init__(self, name, specifier=None):
         self.name = name
-        self.version = None
         self.specifier = specifier
         self.git_commit = None
         if self.specifier is None:
@@ -515,11 +525,6 @@ class Project(object):
         proj = '%s/src/%s' % (target.directory, self.name)
 
         self.read_cscript('%s/cscript' % proj)
-        
-        if os.path.exists('%s/wscript' % proj):
-            v = read_wscript_variable(proj, "VERSION");
-            if v is not None:
-                self.version = Version(v)
 
     def read_cscript(self, s):
         self.cscript = {}
