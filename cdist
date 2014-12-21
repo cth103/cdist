@@ -170,6 +170,52 @@ def read_wscript_variable(directory, variable):
     f.close()
     return None
 
+def set_version_in_wscript(version):
+    f = open('wscript', 'rw')
+    o = open('wscript.tmp', 'w')
+    while True:
+        l = f.readline()
+        if l == '':
+            break
+
+        s = l.split()
+        if len(s) == 3 and s[0] == "VERSION":
+            print "Writing %s" % version
+            print >>o,"VERSION = '%s'" % version
+        else:
+            print >>o,l,
+    f.close()
+    o.close()
+
+    os.rename('wscript.tmp', 'wscript')
+
+def append_version_to_changelog(version):
+    try:
+        f = open('ChangeLog', 'r')
+    except:
+        log('Could not open ChangeLog')
+        return
+
+    c = f.read()
+    f.close()
+
+    f = open('ChangeLog', 'w')
+    now = datetime.datetime.now()
+    f.write('%d-%02d-%02d  Carl Hetherington  <cth@carlh.net>\n\n\t* Version %s released.\n\n' % (now.year, now.month, now.day, version))
+    f.write(c)
+
+def append_version_to_debian_changelog(version):
+    if not os.path.exists('debian'):
+        log('Could not find debian directory')
+        return
+
+    command('dch -b -v %s-1 "New upstream release."' % version)
+
+def devel_to_git(project, filename):
+    if project.git_commit is not None:
+        filename = filename.replace('devel', '-%s' % project.git_commit)
+    return filename
+
 #
 # Version
 #
@@ -504,7 +550,7 @@ class Project(object):
 
     def __init__(self, name, specifier=None):
         self.name = name
-        self.version = version
+        self.version = None
         self.specifier = specifier
         self.git_commit = None
         if self.specifier is None:
@@ -532,53 +578,6 @@ class Project(object):
             v = read_wscript_variable(proj, "VERSION");
             if v is not None:
                 self.version = Version(v)
-
-
-def set_version_in_wscript(version):
-    f = open('wscript', 'rw')
-    o = open('wscript.tmp', 'w')
-    while True:
-        l = f.readline()
-        if l == '':
-            break
-
-        s = l.split()
-        if len(s) == 3 and s[0] == "VERSION":
-            print "Writing %s" % version
-            print >>o,"VERSION = '%s'" % version
-        else:
-            print >>o,l,
-    f.close()
-    o.close()
-
-    os.rename('wscript.tmp', 'wscript')
-
-def append_version_to_changelog(version):
-    try:
-        f = open('ChangeLog', 'r')
-    except:
-        log('Could not open ChangeLog')
-        return
-
-    c = f.read()
-    f.close()
-
-    f = open('ChangeLog', 'w')
-    now = datetime.datetime.now()
-    f.write('%d-%02d-%02d  Carl Hetherington  <cth@carlh.net>\n\n\t* Version %s released.\n\n' % (now.year, now.month, now.day, version))
-    f.write(c)
-
-def append_version_to_debian_changelog(version):
-    if not os.path.exists('debian'):
-        log('Could not find debian directory')
-        return
-
-    command('dch -b -v %s-1 "New upstream release."' % version)
-
-def devel_to_git(project, filename):
-    if project.git_commit is not None:
-        filename = filename.replace('devel', '-%s' % project.git_commit)
-    return filename
 
 
 #
