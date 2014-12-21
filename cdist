@@ -245,7 +245,7 @@ class Target(object):
         if 'dependencies' in project.cscript:
             for d in project.cscript['dependencies'](self):
                 log('Building dependency %s %s of %s' % (d[0], d[1], project.name))
-                dep = Project(d[0], '.', d[1])
+                dep = Project(d[0], d[1])
                 dep.checkout(self)
                 self.build_dependencies(dep)
 
@@ -491,9 +491,8 @@ def target_factory(s, debug, work):
 #
  
 class Project(object):
-    def __init__(self, name, directory, specifier=None):
+    def __init__(self, name, specifier=None):
         self.name = name
-        self.directory = directory
         self.version = None
         self.specifier = specifier
         self.git_commit = None
@@ -512,9 +511,8 @@ class Project(object):
         self.git_commit = command_and_read('git rev-parse --short=7 HEAD').readline().strip()
         command('git submodule init --quiet')
         command('git submodule update --quiet')
-        os.chdir(self.directory)
 
-        proj = '%s/src/%s/%s' % (target.directory, self.name, self.directory)
+        proj = '%s/src/%s' % (target.directory, self.name)
 
         self.read_cscript('%s/cscript' % proj)
         
@@ -603,7 +601,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('command', help=summary)
     parser.add_argument('-p', '--project', help='project name')
-    parser.add_argument('-d', '--directory', help='directory within project repo', default='.')
     parser.add_argument('--minor', help='minor version number bump', action='store_true')
     parser.add_argument('--micro', help='micro version number bump', action='store_true')
     parser.add_argument('--major', help='major version to return with latest', type=int)
@@ -634,7 +631,7 @@ def main():
     globals.quiet = args.quiet
     globals.command = args.command
 
-    project = Project(args.project, args.directory, args.checkout)
+    project = Project(args.project, args.checkout)
 
     if not globals.command in commands:
         e = 'command must be one of:\n' + one_of
