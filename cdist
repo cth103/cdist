@@ -44,6 +44,29 @@ class Error(Exception):
     def __repr__(self):
         return str(self)
 
+class Projects:
+    """
+    Store for Project objects which re-uses already-created objects
+    and checks for requests for different versions of the same thing.
+    """
+
+    def __init__(self):
+        self.projects = []
+
+    def get(self, name, specifier, target):
+        for p in self.projects:
+            if p.name == name and p.specifier == specifier:
+                return p
+            elif p.name == name and p.specifier != p.specifier:
+                raise Error('conflicting versions of %s requested (%s and %s)' % (name, specifier, p.specifier))
+
+        np = Project(name, specifier, target)
+        self.projects.append(np)
+        return np
+
+projects = Projects()
+
+
 #
 # Configuration
 #
@@ -216,6 +239,16 @@ def devel_to_git(project, filename):
         filename = filename.replace('devel', '-%s' % project.git_commit)
     return filename
 
+class ProjectDirectory:
+    def __init__(self, target, project):
+        self.target = target
+        self.project = project
+    def __enter__(self):
+        self.cwd = os.getcwd()
+        os.chdir('%s/src/%s' % (self.target.directory, self.project.name))
+    def __exit__(self, type, value, traceback):
+        os.chdir(self.cwd)
+
 #
 # Version
 #
@@ -291,12 +324,10 @@ class Target(object):
         self.debug = False
 
     def build_dependencies(self, project):
-        cwd = os.getcwd()
         if 'dependencies' in project.cscript:
             for d in project.cscript['dependencies'](self):
                 log('Building dependency %s %s of %s' % (d[0], d[1], project.name))
-                dep = Project(d[0], d[1])
-                dep.checkout(self)
+                dep = projects.get(d[0], d[1], self)
                 self.build_dependencies(dep)
 
                 # Make the options to pass in from the option_defaults of the thing
@@ -310,27 +341,29 @@ class Target(object):
 
                 self.build(dep, options)
 
-        os.chdir(cwd)
-
     def build(self, project, options=None):
+        if project.built:
+            return
+
         variables = copy.copy(self.variables)
+
         if len(inspect.getargspec(project.cscript['build']).args) == 2:
-            project.cscript['build'](self, options)
+            project.call(self, 'build', options)
         else:
-            project.cscript['build'](self)
+            project.call(self, 'build')
+        
         self.variables = variables
+        project.built = True
 
     def package(self, project):
-        project.checkout(self)
         self.build_dependencies(project)
         self.build(project)
-        return project.cscript['package'](self, project.version)
+        return project.call(self, 'package', project.version)
 
     def test(self, project):
-        project.checkout(self)
         self.build_dependencies(project)
         self.build(project)
-        project.cscript['test'](self)
+        return project.call(self, 'test')
 
     def set(self, a, b):
         self.variables[a] = b
@@ -473,11 +506,10 @@ class OSXUniversalTarget(OSXTarget):
 
     def package(self, project):
         for p in self.parts:
-            project.checkout(p)
             p.build_dependencies(project)
             p.build(project)
 
-        return project.cscript['package'](self, project.version)
+        project.call(self, 'package', project.version)
     
 
 #
@@ -496,7 +528,6 @@ class SourceTarget(Target):
         rmtree(self.directory)
 
     def package(self, project):
-        project.checkout(self)
         name = read_wscript_variable(os.getcwd(), 'APPNAME')
         command('./waf dist')
         return os.path.abspath('%s-%s.tar.bz2' % (name, project.version))
@@ -545,18 +576,22 @@ class Project(object):
        Attributes:
            name -- name of git repository (without the .git)
            specifier -- git tag or revision to use
+           target --- target object that we are using
+           version --- version from the wscript (if one is present)
            git_commit -- git revision that is actually being used
+           built --- true if the project has been built yet in this run
     """
 
-    def __init__(self, name, specifier=None):
+    def __init__(self, name, specifier, target):
         self.name = name
-        self.version = None
         self.specifier = specifier
+        self.target = target
+        self.version = None
         self.git_commit = None
-        if self.specifier is None:
-            self.specifier = 'master'
+        self.built = False
 
-    def checkout(self, target):
+        cwd = os.getcwd()
+
         flags = ''
         redirect = ''
         if globals.quiet:
@@ -564,7 +599,12 @@ class Project(object):
             redirect = '>/dev/null'
         command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.directory, self.name))
         os.chdir('%s/src/%s' % (target.directory, self.name))
-        command('git checkout %s %s %s' % (flags, self.specifier, redirect))
+
+        spec = self.specifier
+        if spec is None:
+            spec = 'master'
+
+        command('git checkout %s %s %s' % (flags, spec, redirect))
         self.git_commit = command_and_read('git rev-parse --short=7 HEAD').readline().strip()
         command('git submodule init --quiet')
         command('git submodule update --quiet')
@@ -579,6 +619,11 @@ class Project(object):
             if v is not None:
                 self.version = Version(v)
 
+        os.chdir(cwd)
+
+    def call(self, target, function, *args):
+        with ProjectDirectory(target, self):
+            return self.cscript[function](target, *args)
 
 #
 # Command-line parser
@@ -639,8 +684,6 @@ def main():
     globals.quiet = args.quiet
     globals.command = args.command
 
-    project = Project(args.project, args.checkout)
-
     if not globals.command in commands:
         e = 'command must be one of:\n' + one_of
         raise Error('command must be one of:\n%s' % one_of)
@@ -650,7 +693,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args.target, args.debug, args.work)
-        project.checkout(target)
+        project = projects.get(args.project, args.checkout, target)
         target.build_dependencies(project)
         target.build(project)
         if not args.keep:
@@ -661,6 +704,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args.target, args.debug, args.work)
+        project = projects.get(args.project, args.checkout, target)
 
         packages = target.package(project)
         if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
@@ -690,7 +734,7 @@ def main():
             raise Error('you must specify --minor or --micro')
 
         target = SourceTarget()
-        project.checkout(target)
+        project = projects.get(args.project, args.checkout, target)
 
         version = project.version
         version.to_release()
@@ -716,9 +760,9 @@ def main():
 
     elif globals.command == 'pot':
         target = SourceTarget()
-        project.checkout(target)
+        project = projects.get(args.project, args.checkout, target)
 
-        pots = project.cscript['make_pot'](target)
+        pots = project.call(target, 'make_pot')
         for p in pots:
             copyfile(p, '%s%s' % (args.output, os.path.basename(p)))
 
@@ -726,9 +770,11 @@ def main():
 
     elif globals.command == 'changelog':
         target = SourceTarget()
-        project.checkout(target)
+        project = projects.get(args.project, args.checkout, target)
 
-        text = open('ChangeLog', 'r')
+        with ProjectDirectory(target, project):
+            text = open('ChangeLog', 'r')
+
         html = tempfile.NamedTemporaryFile()
         versions = 8
 
@@ -770,9 +816,9 @@ def main():
 
     elif globals.command == 'manual':
         target = SourceTarget()
-        project.checkout(target)
+        project = projects.get(args.project, args.checkout, target)
 
-        outs = project.cscript['make_manual'](target)
+        outs = project.call(target, 'make_manual')
         for o in outs:
             if os.path.isfile(o):
                 copyfile(o, '%s%s' % (args.output, os.path.basename(o)))
@@ -783,9 +829,9 @@ def main():
 
     elif globals.command == 'doxygen':
         target = SourceTarget()
-        project.checkout(target)
+        project = projects.get(args.project, args.checkout, target)
 
-        dirs = project.cscript['make_doxygen'](target)
+        dirs = project.call(target, 'make_doxygen')
         if hasattr(dirs, 'strip') or (not hasattr(dirs, '__getitem__') and not hasattr(dirs, '__iter__')):
             dirs = [dirs]
 
@@ -796,23 +842,24 @@ def main():
 
     elif globals.command == 'latest':
         target = SourceTarget()
-        project.checkout(target)
+        project = projects.get(args.project, args.checkout, target)
 
-        f = command_and_read('git log --tags --simplify-by-decoration --pretty="%d"')
-        latest = None
-        while latest is None:
-            t = f.readline()
-            m = re.compile(".*\((.*)\).*").match(t)
-            if m:
-                tags = m.group(1).split(', ')
-                for t in tags:
-                    s = t.split()
-                    if len(s) > 1:
-                        t = s[1]
-                    if len(t) > 0 and t[0] == 'v':
-                        v = Version(t[1:])
-                        if args.major is None or v.major == args.major:
-                            latest = v
+        with ProjectDirectory(target, project):
+            f = command_and_read('git log --tags --simplify-by-decoration --pretty="%d"')
+            latest = None
+            while latest is None:
+                t = f.readline()
+                m = re.compile(".*\((.*)\).*").match(t)
+                if m:
+                    tags = m.group(1).split(', ')
+                    for t in tags:
+                        s = t.split()
+                        if len(s) > 1:
+                            t = s[1]
+                        if len(t) > 0 and t[0] == 'v':
+                            v = Version(t[1:])
+                            if args.major is None or v.major == args.major:
+                                latest = v
 
         print latest
         target.cleanup()
@@ -824,7 +871,9 @@ def main():
         target = None
         try:
             target = target_factory(args.target, args.debug, args.work)
-            target.test(project)
+            project = projects.get(args.project, args.checkout, target)
+            with ProjectDirectory(target, project):
+                target.test(project)
         except Error as e:
             if target is not None:
                 target.cleanup()
@@ -843,8 +892,9 @@ def main():
     elif globals.command == 'revision':
 
         target = SourceTarget()
-        project.checkout(target)
-        print command_and_read('git rev-parse HEAD').readline().strip()[:7]
+        project = projects.get(args.project, args.checkout, target)
+        with ProjectDirectory(target, project):
+            print command_and_read('git rev-parse HEAD').readline().strip()[:7]
         target.cleanup()
 
     else:
