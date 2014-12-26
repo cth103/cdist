@@ -528,9 +528,10 @@ class SourceTarget(Target):
         rmtree(self.directory)
 
     def package(self, project):
-        name = read_wscript_variable(os.getcwd(), 'APPNAME')
-        command('./waf dist')
-        return os.path.abspath('%s-%s.tar.bz2' % (name, project.version))
+        with ProjectDirectory(self, project):
+            name = read_wscript_variable(os.getcwd(), 'APPNAME')
+            command('./waf dist')
+            return os.path.abspath('%s-%s.tar.bz2' % (name, project.version))
 
 
 # @param s Target string:
