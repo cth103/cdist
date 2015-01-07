@@ -586,7 +586,6 @@ class Project(object):
     def __init__(self, name, specifier, target):
         self.name = name
         self.specifier = specifier
-        self.target = target
         self.version = None
         self.git_commit = None
         self.built = False
