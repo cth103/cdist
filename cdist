@@ -497,7 +497,7 @@ class SourceTarget(Target):
 
     def package(self, project, checkout):
         tree = globals.trees.get(project, checkout, self)
-        with TreeDirectory(self, tree):
+        with TreeDirectory(tree):
             name = read_wscript_variable(os.getcwd(), 'APPNAME')
             command('./waf dist')
             return os.path.abspath('%s-%s.tar.bz2' % (name, tree.version)), tree.git_commit
