@@ -50,7 +50,7 @@ class Trees:
     def get(self, name, specifier, target):
         for t in self.trees:
             if t.name == name and t.specifier == specifier and t.target == target:
-                return p
+                return t
             elif t.name == name and t.specifier != specifier:
                 raise Error('conflicting versions of %s requested (%s and %s)' % (name, specifier, t.specifier))
 
