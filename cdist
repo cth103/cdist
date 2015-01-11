@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-#    Copyright (C) 2012-2014 Carl Hetherington <cth@carlh.net>
+#    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -30,12 +30,6 @@ import inspect
 
 TEMPORARY_DIRECTORY = '/tmp'
 
-class Globals:
-    quiet = False
-    command = None
-
-globals = Globals()
-
 class Error(Exception):
     def __init__(self, value):
         self.value = value
@@ -44,27 +38,32 @@ class Error(Exception):
     def __repr__(self):
         return str(self)
 
-class Projects:
+class Trees:
     """
-    Store for Project objects which re-uses already-created objects
+    Store for Tree objects which re-uses already-created objects
     and checks for requests for different versions of the same thing.
     """
 
     def __init__(self):
-        self.projects = []
+        self.trees = []
 
     def get(self, name, specifier, target):
-        for p in self.projects:
-            if p.name == name and p.specifier == specifier:
-                return p
-            elif p.name == name and p.specifier != p.specifier:
-                raise Error('conflicting versions of %s requested (%s and %s)' % (name, specifier, p.specifier))
+        for t in self.trees:
+            if t.name == name and t.specifier == specifier and t.target == target:
+                return t
+            elif t.name == name and t.specifier != specifier:
+                raise Error('conflicting versions of %s requested (%s and %s)' % (name, specifier, t.specifier))
 
-        np = Project(name, specifier, target)
-        self.projects.append(np)
-        return np
+        nt = Tree(name, specifier, target)
+        self.trees.append(nt)
+        return nt
 
-projects = Projects()
+class Globals:
+    quiet = False
+    command = None
+    trees = Trees()
+
+globals = Globals()
 
 
 #
@@ -234,18 +233,17 @@ def append_version_to_debian_changelog(version):
 
     command('dch -b -v %s-1 "New upstream release."' % version)
 
-def devel_to_git(project, filename):
-    if project.git_commit is not None:
-        filename = filename.replace('devel', '-%s' % project.git_commit)
+def devel_to_git(git_commit, filename):
+    if git_commit is not None:
+        filename = filename.replace('devel', '-%s' % git_commit)
     return filename
 
-class ProjectDirectory:
-    def __init__(self, target, project):
-        self.target = target
-        self.project = project
+class TreeDirectory:
+    def __init__(self, tree):
+        self.tree = tree
     def __enter__(self):
         self.cwd = os.getcwd()
-        os.chdir('%s/src/%s' % (self.target.directory, self.project.name))
+        os.chdir('%s/src/%s' % (self.tree.target.directory, self.tree.name))
     def __exit__(self, type, value, traceback):
         os.chdir(self.cwd)
 
@@ -323,47 +321,16 @@ class Target(object):
         self.variables = {}
         self.debug = False
 
-    def build_dependencies(self, project):
-        if 'dependencies' in project.cscript:
-            for d in project.cscript['dependencies'](self):
-                log('Building dependency %s %s of %s' % (d[0], d[1], project.name))
-                dep = projects.get(d[0], d[1], self)
-                self.build_dependencies(dep)
+    def package(self, project, checkout):
+        tree = globals.trees.get(project, checkout, self)
+        tree.build_dependencies()
+        tree.build(tree)
+        return tree.call('package', tree.version), tree.git_commit
 
-                # Make the options to pass in from the option_defaults of the thing
-                # we are building and any options specified by the parent.
-                options = {}
-                if 'option_defaults' in dep.cscript:
-                    options = dep.cscript['option_defaults']()
-                    if len(d) > 2:
-                        for k, v in d[2].iteritems():
-                            options[k] = v
-
-                self.build(dep, options)
-
-    def build(self, project, options=None):
-        if project.built:
-            return
-
-        variables = copy.copy(self.variables)
-
-        if len(inspect.getargspec(project.cscript['build']).args) == 2:
-            project.call(self, 'build', options)
-        else:
-            project.call(self, 'build')
-        
-        self.variables = variables
-        project.built = True
-
-    def package(self, project):
-        self.build_dependencies(project)
-        self.build(project)
-        return project.call(self, 'package', project.version)
-
-    def test(self, project):
-        self.build_dependencies(project)
-        self.build(project)
-        return project.call(self, 'test')
+    def test(self, tree):
+        tree.build_dependencies()
+        tree.build()
+        return tree.call('test')
 
     def set(self, a, b):
         self.variables[a] = b
@@ -493,24 +460,25 @@ class OSXSingleTarget(OSXTarget):
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
         self.set('MACOSX_DEPLOYMENT_TARGET', config.get('osx_sdk'))
 
-    def package(self, project):
+    def package(self, project, checkout):
         raise Error('cannot package non-universal OS X versions')
 
 
 class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
-        self.parts = []
-        self.parts.append(OSXSingleTarget(32, os.path.join(self.directory, '32')))
-        self.parts.append(OSXSingleTarget(64, os.path.join(self.directory, '64')))
 
-    def package(self, project):
-        for p in self.parts:
-            p.build_dependencies(project)
-            p.build(project)
+    def package(self, project, checkout):
 
-        project.call(self, 'package', project.version)
-    
+        for b in [32, 64]:
+            target = OSXSingleTarget(b, os.path.join(self.directory, '%d' % b))
+            tree = globals.trees.get(project, checkout, target)
+            tree.build_dependencies()
+            tree.build()
+        
+        tree = globals.trees.get(project, checkout, self)    
+        with TreeDirectory(tree):
+            return tree.call('package', tree.version), tree.git_commit
 
 #
 # Source
@@ -527,11 +495,12 @@ class SourceTarget(Target):
     def cleanup(self):
         rmtree(self.directory)
 
-    def package(self, project):
-        with ProjectDirectory(self, project):
+    def package(self, project, checkout):
+        tree = globals.trees.get(project, checkout, self)
+        with TreeDirectory(tree):
             name = read_wscript_variable(os.getcwd(), 'APPNAME')
             command('./waf dist')
-            return os.path.abspath('%s-%s.tar.bz2' % (name, project.version))
+            return os.path.abspath('%s-%s.tar.bz2' % (name, tree.version)), tree.git_commit
 
 
 # @param s Target string:
@@ -569,18 +538,19 @@ def target_factory(s, debug, work):
 
 
 #
-# Project
+# Tree
 #
  
-class Project(object):
-    """Description of a project.  This class is never exposed to cscripts.
+class Tree(object):
+    """Description of a tree, which is a checkout of a project,
+       possibly built.  This class is never exposed to cscripts.
        Attributes:
            name -- name of git repository (without the .git)
            specifier -- git tag or revision to use
            target --- target object that we are using
            version --- version from the wscript (if one is present)
            git_commit -- git revision that is actually being used
-           built --- true if the project has been built yet in this run
+           built --- true if the tree has been built yet in this run
     """
 
     def __init__(self, name, specifier, target):
@@ -621,9 +591,41 @@ class Project(object):
 
         os.chdir(cwd)
 
-    def call(self, target, function, *args):
-        with ProjectDirectory(target, self):
-            return self.cscript[function](target, *args)
+    def call(self, function, *args):
+        with TreeDirectory(self):
+            return self.cscript[function](self.target, *args)
+
+    def build_dependencies(self):
+        if 'dependencies' in self.cscript:
+            for d in self.cscript['dependencies'](self.target):
+                log('Building dependency %s %s of %s' % (d[0], d[1], self.name))
+                dep = globals.trees.get(d[0], d[1], self.target)
+                dep.build_dependencies()
+
+                # Make the options to pass in from the option_defaults of the thing
+                # we are building and any options specified by the parent.
+                options = {}
+                if 'option_defaults' in dep.cscript:
+                    options = dep.cscript['option_defaults']()
+                    if len(d) > 2:
+                        for k, v in d[2].iteritems():
+                            options[k] = v
+
+                dep.build(options)
+
+    def build(self, options=None):
+        if self.built:
+            return
+
+        variables = copy.copy(self.target.variables)
+
+        if len(inspect.getargspec(self.cscript['build']).args) == 2:
+            self.call('build', options)
+        else:
+            self.call('build')
+        
+        self.target.variables = variables
+        self.built = True
 
 #
 # Command-line parser
@@ -693,9 +695,9 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args.target, args.debug, args.work)
-        project = projects.get(args.project, args.checkout, target)
-        target.build_dependencies(project)
-        target.build(project)
+        tree = globals.trees.get(args.project, args.checkout, target)
+        tree.build_dependencies()
+        tree.build()
         if not args.keep:
             target.cleanup()
 
@@ -704,9 +706,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args.target, args.debug, args.work)
-        project = projects.get(args.project, args.checkout, target)
-
-        packages = target.package(project)
+        packages, git_commit = target.package(args.project, args.checkout)
         if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
             packages = [packages]
 
@@ -717,14 +717,14 @@ def main():
             except:
                 pass
             for p in packages:
-                copyfile(p, '%s/%s' % (out, os.path.basename(devel_to_git(project, p))))
+                copyfile(p, '%s/%s' % (out, os.path.basename(devel_to_git(git_commit, p))))
         else:
             try:
                 makedirs(args.output)
             except:
                 pass
             for p in packages:
-                copyfile(p, '%s%s' % (args.output, os.path.basename(devel_to_git(project, p))))
+                copyfile(p, '%s%s' % (args.output, os.path.basename(devel_to_git(git_commit, p))))
 
         if not args.keep:
             target.cleanup()
@@ -734,9 +734,9 @@ def main():
             raise Error('you must specify --minor or --micro')
 
         target = SourceTarget()
-        project = projects.get(args.project, args.checkout, target)
+        tree = globals.trees.get(args.project, args.checkout, target)
 
-        version = project.version
+        version = tree.version
         version.to_release()
         if args.minor:
             version.bump_minor()
@@ -760,9 +760,9 @@ def main():
 
     elif globals.command == 'pot':
         target = SourceTarget()
-        project = projects.get(args.project, args.checkout, target)
+        tree = globals.trees.get(args.project, args.checkout, target)
 
-        pots = project.call(target, 'make_pot')
+        pots = tree.call('make_pot')
         for p in pots:
             copyfile(p, '%s%s' % (args.output, os.path.basename(p)))
 
@@ -770,9 +770,9 @@ def main():
 
     elif globals.command == 'changelog':
         target = SourceTarget()
-        project = projects.get(args.project, args.checkout, target)
+        tree = globals.trees.get(args.project, args.checkout, target)
 
-        with ProjectDirectory(target, project):
+        with TreeDirectory(tree):
             text = open('ChangeLog', 'r')
 
         html = tempfile.NamedTemporaryFile()
@@ -816,9 +816,9 @@ def main():
 
     elif globals.command == 'manual':
         target = SourceTarget()
-        project = projects.get(args.project, args.checkout, target)
+        tree = globals.trees.get(args.project, args.checkout, target)
 
-        outs = project.call(target, 'make_manual')
+        outs = tree.call('make_manual')
         for o in outs:
             if os.path.isfile(o):
                 copyfile(o, '%s%s' % (args.output, os.path.basename(o)))
@@ -829,9 +829,9 @@ def main():
 
     elif globals.command == 'doxygen':
         target = SourceTarget()
-        project = projects.get(args.project, args.checkout, target)
+        tree = globals.trees.get(args.project, args.checkout, target)
 
-        dirs = project.call(target, 'make_doxygen')
+        dirs = tree.call('make_doxygen')
         if hasattr(dirs, 'strip') or (not hasattr(dirs, '__getitem__') and not hasattr(dirs, '__iter__')):
             dirs = [dirs]
 
@@ -842,9 +842,9 @@ def main():
 
     elif globals.command == 'latest':
         target = SourceTarget()
-        project = projects.get(args.project, args.checkout, target)
+        tree = globals.trees.get(args.project, args.checkout, target)
 
-        with ProjectDirectory(target, project):
+        with TreeDirectory(tree):
             f = command_and_read('git log --tags --simplify-by-decoration --pretty="%d"')
             latest = None
             while latest is None:
@@ -871,9 +871,9 @@ def main():
         target = None
         try:
             target = target_factory(args.target, args.debug, args.work)
-            project = projects.get(args.project, args.checkout, target)
-            with ProjectDirectory(target, project):
-                target.test(project)
+            tree = globals.trees.get(args.project, args.checkout, target)
+            with TreeDirectory(tree):
+                target.test(tree)
         except Error as e:
             if target is not None:
                 target.cleanup()
@@ -892,8 +892,8 @@ def main():
     elif globals.command == 'revision':
 
         target = SourceTarget()
-        project = projects.get(args.project, args.checkout, target)
-        with ProjectDirectory(target, project):
+        tree = globals.trees.get(args.project, args.checkout, target)
+        with TreeDirectory(tree):
             print command_and_read('git rev-parse HEAD').readline().strip()[:7]
         target.cleanup()
 
