@@ -645,6 +645,7 @@ def main():
         "latest": "print out the latest version",
         "test": "run the project's unit tests",
         "shell": "build the project then start a shell in its chroot",
+        "checkout": "check out the project",
         "revision": "print the head git revision number"
     }
 
@@ -896,6 +897,17 @@ def main():
         tree = globals.trees.get(args.project, args.checkout, target)
         with TreeDirectory(tree):
             print command_and_read('git rev-parse HEAD').readline().strip()[:7]
+        target.cleanup()
+
+    elif globals.command == 'checkout':
+
+        if args.output is None:
+            raise Error('you must specify -o or --output')
+
+        target = SourceTarget()
+        tree = globals.trees.get(args.project, args.checkout, target)
+        with TreeDirectory(tree):
+            shutil.copytree('.', args.output)
         target.cleanup()
 
     else:
