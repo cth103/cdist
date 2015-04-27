@@ -412,7 +412,10 @@ class LinuxTarget(Target):
         self.version = version
         self.bits = bits
         # e.g. ubuntu-14.04-64
-        self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
+        if self.version is not None and self.bits is not None:
+            self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
+        else:
+            self.chroot = self.distro
         # e.g. /home/carl/Environments/ubuntu-14.04-64
         self.chroot_prefix = '%s/%s' % (config.get('linux_chroot_prefix'), self.chroot)
 
@@ -522,7 +525,7 @@ def target_factory(s, debug, work):
             sys.exit(1)
         target = LinuxTarget(p[0], p[1], int(p[2]), work)
     elif s == 'raspbian':
-        target = LinuxTarget(s, '', 32, work)
+        target = LinuxTarget(s, None, None, work)
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
