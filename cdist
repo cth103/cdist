@@ -521,6 +521,8 @@ def target_factory(s, debug, work):
             print >>sys.stderr,"Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s
             sys.exit(1)
         target = LinuxTarget(p[0], p[1], int(p[2]), work)
+    elif s == 'raspbian':
+        target = LinuxTarget(s, '', 32, work)
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
