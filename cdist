@@ -843,7 +843,7 @@ def main():
             dirs = [dirs]
 
         for d in dirs:
-            copytree(d, '%s%s' % (args.output, 'doc'))
+            copytree(d, args.output)
 
         target.cleanup()
 
