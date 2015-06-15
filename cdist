@@ -416,7 +416,10 @@ class LinuxTarget(Target):
         self.version = version
         self.bits = bits
         # e.g. ubuntu-14.04-64
-        self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
+        if self.version is not None and self.bits is not None:
+            self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
+        else:
+            self.chroot = self.distro
         # e.g. /home/carl/Environments/ubuntu-14.04-64
         self.chroot_prefix = '%s/%s' % (config.get('linux_chroot_prefix'), self.chroot)
 
@@ -424,7 +427,7 @@ class LinuxTarget(Target):
         self.set('CPPFLAGS', '')
         self.set('LINKFLAGS', '-L%s/lib' % self.directory)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:/usr/local/lib/pkgconfig' % self.directory)
-        self.set('PATH', '%s:/usr/local/bin' % (os.environ['PATH']))
+        self.set('PATH', '/usr/bin:/bin:/usr/sbin:/sbin/:/usr/local/bin')
 
     def command(self, c):
         command('%s schroot -c %s -p -- %s' % (self.variables_string(), self.chroot, c))
@@ -525,6 +528,8 @@ def target_factory(s, debug, work):
             print >>sys.stderr,"Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s
             sys.exit(1)
         target = LinuxTarget(p[0], p[1], int(p[2]), work)
+    elif s == 'raspbian':
+        target = LinuxTarget(s, None, None, work)
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
@@ -847,7 +852,7 @@ def main():
             dirs = [dirs]
 
         for d in dirs:
-            copytree(d, '%s%s' % (args.output, 'doc'))
+            copytree(d, args.output)
 
         target.cleanup()
 
