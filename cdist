@@ -124,6 +124,10 @@ class Config:
 
         raise Error('Required setting %s not found' % k)
 
+    def set(self, k, v):
+        for o in self.options:
+            o.offer(k, v)
+                
 config = Config()
 
 #
@@ -668,7 +672,12 @@ def main():
     parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
     parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
     parser.add_argument('-w', '--work', help='override default work directory')
+    parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
     args = parser.parse_args()
+
+    # Override configured stuff
+    if args.git_prefix is not None:
+        config.set('git_prefix', args.git_prefix)
 
     if args.output.find(':') == -1:
         # This isn't of the form host:path so make it absolute
