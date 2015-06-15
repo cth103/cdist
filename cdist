@@ -427,7 +427,7 @@ class LinuxTarget(Target):
         self.set('CPPFLAGS', '')
         self.set('LINKFLAGS', '-L%s/lib' % self.directory)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:/usr/local/lib/pkgconfig' % self.directory)
-        self.set('PATH', '/usr/bin:/bin:/usr/sbin:/sbin/:/usr/local/bin')
+        self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
     def command(self, c):
         command('%s schroot -c %s -p -- %s' % (self.variables_string(), self.chroot, c))
