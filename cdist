@@ -127,12 +127,12 @@ class Config:
     def set(self, k, v):
         for o in self.options:
             o.offer(k, v)
-                
+
 config = Config()
 
 #
 # Utility bits
-# 
+#
 
 def log(m):
     if not globals.quiet:
@@ -187,7 +187,7 @@ def read_wscript_variable(directory, variable):
         l = f.readline()
         if l == '':
             break
-        
+
         s = l.split()
         if len(s) == 3 and s[0] == variable:
             f.close()
@@ -263,7 +263,7 @@ class Version:
             s = s[1:]
         if s.endswith("'"):
             s = s[0:-1]
-        
+
         if s.endswith('devel'):
             s = s[0:-5]
             self.devel = True
@@ -346,10 +346,14 @@ class Target(object):
         return self.variables[a]
 
     def append_with_space(self, k, v):
-        if not k in self.variables:
+        if (not k in self.variables) or len(self.variables[k]) == 0:
             self.variables[k] = v
         else:
-            self.variables[k] = '%s %s' % (self.variables[k], v)
+            e = self.variables[k]
+            if e[0] == '"' and e[-1] == '"':
+                self.variables[k] = '"%s %s"' % (e[1:-1], v)
+            else:
+                self.variables[k] = '%s %s' % (e, v)
 
     def variables_string(self, escaped_quotes=False):
         e = ''
@@ -363,7 +367,7 @@ class Target(object):
         if self.rmdir:
             rmtree(self.directory)
 
-# 
+#
 # Windows
 #
 
@@ -375,7 +379,7 @@ class WindowsTarget(Target):
         self.windows_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
         if not os.path.exists(self.windows_prefix):
             raise Error('windows prefix %s does not exist' % self.windows_prefix)
-            
+
         if self.bits == 32:
             self.mingw_name = 'i686'
         else:
@@ -482,8 +486,8 @@ class OSXUniversalTarget(OSXTarget):
             tree = globals.trees.get(project, checkout, target)
             tree.build_dependencies()
             tree.build()
-        
-        tree = globals.trees.get(project, checkout, self)    
+
+        tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
             return tree.call('package', tree.version), tree.git_commit
 
@@ -516,7 +520,7 @@ class SourceTarget(Target):
 #    or debian-version-{32,64}
 #    or centos-version-{32,64}
 #    or osx-{32,64}
-#    or source      
+#    or source
 # @param debug True to build with debugging symbols (where possible)
 def target_factory(s, debug, work):
     target = None
@@ -549,7 +553,7 @@ def target_factory(s, debug, work):
 #
 # Tree
 #
- 
+
 class Tree(object):
     """Description of a tree, which is a checkout of a project,
        possibly built.  This class is never exposed to cscripts.
@@ -633,7 +637,7 @@ class Tree(object):
             self.call('build', options)
         else:
             self.call('build')
-        
+
         self.target.variables = variables
         self.built = True
 
@@ -698,7 +702,7 @@ def main():
 
     if args.project is None and args.command != 'shell':
         raise Error('you must specify -p or --project')
-        
+
     globals.quiet = args.quiet
     globals.command = args.command
 
