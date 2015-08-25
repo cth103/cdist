@@ -347,13 +347,13 @@ class Target(object):
 
     def append_with_space(self, k, v):
         if (not k in self.variables) or len(self.variables[k]) == 0:
-            self.variables[k] = v
+            self.variables[k] = '"%s"' % v
         else:
             e = self.variables[k]
             if e[0] == '"' and e[-1] == '"':
                 self.variables[k] = '"%s %s"' % (e[1:-1], v)
             else:
-                self.variables[k] = '%s %s' % (e, v)
+                self.variables[k] = '"%s %s"' % (e, v)
 
     def variables_string(self, escaped_quotes=False):
         e = ''
