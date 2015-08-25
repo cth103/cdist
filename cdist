@@ -404,6 +404,7 @@ class WindowsTarget(Target):
         self.set('CXXFLAGS', '"%s"' % cxx)
         self.set('CPPFLAGS', '')
         self.set('LINKFLAGS', '"%s"' % link)
+        self.set('LDFLAGS', '"%s"' % link)
 
     def command(self, c):
         log('host -> %s' % c)
