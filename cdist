@@ -410,16 +410,24 @@ class WindowsTarget(Target):
         log('host -> %s' % c)
         command('%s %s' % (self.variables_string(), c))
 
-#
-# Linux
-#
-
 class LinuxTarget(Target):
+    """Parent for Linux targets"""
     def __init__(self, distro, version, bits, directory=None):
         super(LinuxTarget, self).__init__('linux', directory)
         self.distro = distro
         self.version = version
         self.bits = bits
+
+        self.set('CXXFLAGS', '-I%s/include' % self.directory)
+        self.set('CPPFLAGS', '')
+        self.set('LINKFLAGS', '-L%s/lib' % self.directory)
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:/usr/local/lib/pkgconfig' % self.directory)
+        self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
+        
+class ChrootTarget(LinuxTarget):
+    """Build in a chroot"""
+    def __init__(self, distro, version, bits, directory=None):
+        super(ChrootTarget, self).__init__(distro, version, bits, directory)
         # e.g. ubuntu-14.04-64
         if self.version is not None and self.bits is not None:
             self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
@@ -428,14 +436,17 @@ class LinuxTarget(Target):
         # e.g. /home/carl/Environments/ubuntu-14.04-64
         self.chroot_prefix = '%s/%s' % (config.get('linux_chroot_prefix'), self.chroot)
 
-        self.set('CXXFLAGS', '-I%s/include' % self.directory)
-        self.set('CPPFLAGS', '')
-        self.set('LINKFLAGS', '-L%s/lib' % self.directory)
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:/usr/local/lib/pkgconfig' % self.directory)
-        self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
-
     def command(self, c):
         command('%s schroot -c %s -p -- %s' % (self.variables_string(), self.chroot, c))
+
+
+class HostTarget(LinuxTarget):
+    """Build directly on the host"""
+    def __init__(self, distro, version, bits, directory=None):
+        super(HostTarget, self).__init__(distro, version, bits, directory)
+
+    def command(self, c):
+        command('%s %s' % (self.variables_string(), c))
 
 #
 # OS X
@@ -492,11 +503,8 @@ class OSXUniversalTarget(OSXTarget):
         with TreeDirectory(tree):
             return tree.call('package', tree.version), tree.git_commit
 
-#
-# Source
-#
-
 class SourceTarget(Target):
+    """Build a source .tar.bz2"""
     def __init__(self):
         super(SourceTarget, self).__init__('source')
 
@@ -530,11 +538,21 @@ def target_factory(s, debug, work):
     elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-'):
         p = s.split('-')
         if len(p) != 3:
-            print >>sys.stderr,"Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s
-            sys.exit(1)
-        target = LinuxTarget(p[0], p[1], int(p[2]), work)
+            raise Error("Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s)
+        target = ChrootTarget(p[0], p[1], int(p[2]), work)
     elif s == 'raspbian':
-        target = LinuxTarget(s, None, None, work)
+        target = ChrootTarget(s, None, None, work)
+    elif s == 'host':
+        try:
+            f = open('/etc/fedora-release', 'r')
+            l = f.readline().strip().split()
+            if command_and_read('uname -m') == 'x86_64':
+                bits = 64
+            else:
+                bits = 32
+            target = HostTarget("fedora", l[2], bits, work)
+        except:
+            raise Error("could not identify distribution for `host' target")
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
@@ -545,9 +563,10 @@ def target_factory(s, debug, work):
     elif s == 'source':
         target = SourceTarget()
 
-    if target is not None:
-        target.debug = debug
+    if target is None:
+        raise Error("Bad target `%s'" % s)
 
+    target.debug = debug
     return target
 
 
