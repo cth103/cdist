@@ -546,7 +546,7 @@ def target_factory(s, debug, work):
         try:
             f = open('/etc/fedora-release', 'r')
             l = f.readline().strip().split()
-            if command_and_read('uname -m') == 'x86_64':
+            if command_and_read('uname -m').read().strip() == 'x86_64':
                 bits = 64
             else:
                 bits = 32
