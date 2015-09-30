@@ -28,7 +28,7 @@ import re
 import copy
 import inspect
 
-TEMPORARY_DIRECTORY = '/tmp'
+TEMPORARY_DIRECTORY = '/var/tmp'
 
 class Error(Exception):
     def __init__(self, value):
