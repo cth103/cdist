@@ -1,0 +1,28 @@
+#!/bin/bash
+
+if [ "$1" == "" ]; then
+  echo "Syntax: $0 <target> [<checkout>]"
+fi
+
+IFS='-' read distro version bits <<< $1
+
+if [ "$2" != "" ]; then
+  checkout="-c $2"
+fi
+
+if [ "$bits" == "32" ]; then
+  port=2000
+elif [ "$bits" == "64" ]; then
+  port=2001
+else
+  echo "Unrecognised bit depth $bits"
+  exit 1
+fi
+
+nohup vboxheadless --startvm fedora-22-$bits &
+sleep 10
+ssh -p $port carl@localhost "rm -rf fedora-*"
+ssh -p $port carl@localhost cdist -p dcpomatic -c $checkout -t host package
+scp -P $port carl@localhost:fedora-22-$bits/* .
+ssh -p $port carl@localhost "sudo /sbin/poweroff"
+
