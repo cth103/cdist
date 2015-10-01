@@ -7,7 +7,6 @@ fi
 
 IFS='-' read distro version bits <<< $1
 
-bits=$1
 checkout=$2
 output=$3
 
