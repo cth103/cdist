@@ -2,6 +2,7 @@
 
 if [ "$1" == "" -o "$2" == "" ]; then
     echo "Syntax: $0 <target> <checkout> [<output-dir>]"
+    exit 1
 fi
 
 IFS='-' read distro version bits <<< $1
