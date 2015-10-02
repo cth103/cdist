@@ -20,6 +20,7 @@ else
 fi
 
 nohup vboxheadless --startvm fedora-22-$bits &
+vbox=$!
 sleep 10
 ssh -p $port carl@localhost "rm -rf fedora-*"
 ssh -p $port carl@localhost cdist -p dcpomatic -c $checkout -t host package
@@ -27,3 +28,6 @@ if [ "$output" != "" ]; then
     scp -P $port carl@localhost:fedora-22-$bits/* $output/
 fi
 ssh -p $port carl@localhost "sudo /sbin/poweroff"
+while [[ ( -d /proc/$vbox ) && ( -z `grep zombie /proc/$vbox/status` ) ]]; do
+    sleep 1
+done
