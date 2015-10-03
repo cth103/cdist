@@ -1,7 +1,8 @@
 #!/bin/bash
+set -e
 
 if [ "$1" == "" -o "$2" == "" ]; then
-    echo "Syntax: $0 <target> <checkout> [<output-dir>]"
+    echo "Syntax: $0 <target> <version> [<output-dir>]"
 fi
 
 IFS='-' read distro version bits <<< $1
@@ -22,7 +23,7 @@ fi
 nohup vboxheadless --startvm fedora-22-$bits &
 sleep 10
 ssh -p $port carl@localhost "rm -rf fedora-*"
-ssh -p $port carl@localhost cdist -p dcpomatic -c $checkout -t host package
+ssh -p $port carl@localhost cdist -p dcpomatic -c v$checkout -t host package
 if [ "$output" != "" ]; then
     scp -P $port carl@localhost:fedora-22-$bits/* $output/
 fi
