@@ -3,11 +3,11 @@ set -e
 
 if [ "$1" == "" -o "$2" == "" ]; then
     echo "Syntax: $0 <target> <version> [<output-dir>]"
+    exit 1
 fi
 
 IFS='-' read distro version bits <<< $1
 
-bits=$1
 checkout=$2
 output=$3
 
@@ -21,6 +21,7 @@ else
 fi
 
 nohup vboxheadless --startvm fedora-22-$bits &
+vbox=$!
 sleep 10
 ssh -p $port carl@localhost "rm -rf fedora-*"
 ssh -p $port carl@localhost cdist -p dcpomatic -c v$checkout -t host package
@@ -28,3 +29,6 @@ if [ "$output" != "" ]; then
     scp -P $port carl@localhost:fedora-22-$bits/* $output/
 fi
 ssh -p $port carl@localhost "sudo /sbin/poweroff"
+while [[ ( -d /proc/$vbox ) && ( -z `grep zombie /proc/$vbox/status` ) ]]; do
+    sleep 1
+done
