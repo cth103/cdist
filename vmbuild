@@ -31,6 +31,9 @@ fi
 ssh -p $port carl@localhost "sudo /sbin/poweroff"
 
 set +e
+echo "Waiting for virtualbox to finish"
 while [[ ( -d /proc/$vbox ) && ( -z `grep zombie /proc/$vbox/status` ) ]]; do
     sleep 1
 done
+echo "Finished"
+exit 0
