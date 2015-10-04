@@ -32,3 +32,4 @@ ssh -p $port carl@localhost "sudo /sbin/poweroff"
 while [[ ( -d /proc/$vbox ) && ( -z `grep zombie /proc/$vbox/status` ) ]]; do
     sleep 1
 done
+exit 0
