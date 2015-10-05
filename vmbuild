@@ -28,12 +28,10 @@ ssh -p $port carl@localhost cdist -p dcpomatic -c $checkout -t host package
 if [ "$output" != "" ]; then
     scp -P $port carl@localhost:fedora-22-$bits/* $output/
 fi
-ssh -p $port carl@localhost "sudo /sbin/poweroff"
-
 set +e
-echo "Waiting for virtualbox to finish"
+ssh -p $port carl@localhost "sudo /sbin/poweroff"
+set -e
+
 while [[ ( -d /proc/$vbox ) && ( -z `grep zombie /proc/$vbox/status` ) ]]; do
     sleep 1
 done
-echo "Finished"
-exit 0
