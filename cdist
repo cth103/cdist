@@ -423,7 +423,7 @@ class LinuxTarget(Target):
         self.set('LINKFLAGS', '-L%s/lib' % self.directory)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:/usr/local/lib/pkgconfig' % self.directory)
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
-        
+
 class ChrootTarget(LinuxTarget):
     """Build in a chroot"""
     def __init__(self, distro, version, bits, directory=None):
@@ -551,8 +551,8 @@ def target_factory(s, debug, work):
             else:
                 bits = 32
             target = HostTarget("fedora", l[2], bits, work)
-        except:
-            raise Error("could not identify distribution for `host' target")
+        except Exception as e:
+            raise Error("could not identify distribution for `host' target (%s)" % e)
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
