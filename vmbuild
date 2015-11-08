@@ -6,19 +6,22 @@ if [ "$1" == "" -o "$2" == "" ]; then
     exit 1
 fi
 
-IFS='-' read distro version bits <<< $1
+target=$1
+
+IFS='-' read distro version bits <<< $target
 
 checkout=$2
 output=$3
 
-if [ "$bits" == "32" ]; then
-    port=2000
-elif [ "$bits" == "64" ]; then
-    port=2001
-else
+case $target in
+fedora-22-32) port=2000;;
+fedora-22-64) port=2001;;
+fedora-23-32) port=2002;;
+fedora-23-64) port=2003;;
+*)
     echo "Unrecognised bit depth $bits"
     exit 1
-fi
+esac
 
 nohup vboxheadless --startvm $target &
 vbox=$!
