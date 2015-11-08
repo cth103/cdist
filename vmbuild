@@ -20,7 +20,7 @@ else
     exit 1
 fi
 
-nohup vboxheadless --startvm fedora-22-$bits &
+nohup vboxheadless --startvm $target &
 vbox=$!
 sleep 10
 ssh -p $port carl@localhost "rm -rf fedora-*"
@@ -30,7 +30,7 @@ if [ "$output" != "" ]; then
     echo "copy from vm to $output..."
     tmp=/var/tmp/copy.$$
     mkdir -p $tmp
-    scp -P $port carl@localhost:fedora-22-$bits/* $tmp/
+    scp -P $port carl@localhost:$target/* $tmp/
     scp $tmp/*.rpm $output/
     rm -rf $tmp
 fi
