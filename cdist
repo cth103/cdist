@@ -472,7 +472,7 @@ class OSXSingleTarget(OSXTarget):
         else:
             arch = 'x86_64'
 
-        flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (self.sdk_prefix, self.osx_sdk, arch)
+        flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (self.sdk_prefix, self.sdk, arch)
         enviro = '%s/%d' % (config.get('osx_environment_prefix'), bits)
 
         # Environment variables
