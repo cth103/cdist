@@ -455,6 +455,8 @@ class HostTarget(LinuxTarget):
 class OSXTarget(Target):
     def __init__(self, directory=None):
         super(OSXTarget, self).__init__('osx', directory)
+        self.sdk = config.get('osx_sdk')
+        self.sdk_prefix = config.get('osx_sdk_prefix')
 
     def command(self, c):
         command('%s %s' % (self.variables_string(False), c))
@@ -470,7 +472,7 @@ class OSXSingleTarget(OSXTarget):
         else:
             arch = 'x86_64'
 
-        flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (config.get('osx_sdk_prefix'), config.get('osx_sdk'), arch)
+        flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (self.sdk_prefix, self.osx_sdk, arch)
         enviro = '%s/%d' % (config.get('osx_environment_prefix'), bits)
 
         # Environment variables
