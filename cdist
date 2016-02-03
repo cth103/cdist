@@ -551,16 +551,19 @@ def target_factory(s, debug, work):
     elif s == 'raspbian':
         target = ChrootTarget(s, None, None, work)
     elif s == 'host':
+        l = f.readline().strip().split()
+        if command_and_read('uname -m').read().strip() == 'x86_64':
+            bits = 64
+        else:
+            bits = 32
         try:
             f = open('/etc/fedora-release', 'r')
-            l = f.readline().strip().split()
-            if command_and_read('uname -m').read().strip() == 'x86_64':
-                bits = 64
-            else:
-                bits = 32
             target = HostTarget("fedora", l[2], bits, work)
         except Exception as e:
-            raise Error("could not identify distribution for `host' target (%s)" % e)
+            if os.path.exists('/etc/arch-release'):
+                target = HostTarget("arch", None, l[2], bits, work)
+            else:
+                raise Error("could not identify distribution for `host' target (%s)" % e)
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
