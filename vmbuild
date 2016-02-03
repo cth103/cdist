@@ -18,6 +18,7 @@ fedora-22-32) port=2000;;
 fedora-22-64) port=2001;;
 fedora-23-32) port=2002;;
 fedora-23-64) port=2003;;
+arch-64)      port=2004;;
 *)
     echo "Unrecognised bit depth $bits"
     exit 1
