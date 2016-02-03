@@ -136,7 +136,7 @@ config = Config()
 
 def log(m):
     if not globals.quiet:
-        print '\x1b[33m* %s\x1b[0m' % m
+        print('\x1b[33m* %s\x1b[0m' % m)
 
 def scp_escape(n):
     s = n.split(':')
@@ -206,10 +206,10 @@ def set_version_in_wscript(version):
 
         s = l.split()
         if len(s) == 3 and s[0] == "VERSION":
-            print "Writing %s" % version
-            print >>o,"VERSION = '%s'" % version
+            print("Writing %s" % version)
+            print("VERSION = '%s'" % version, file=o)
         else:
-            print >>o,l,
+            print(l, file=o, end="")
     f.close()
     o.close()
 
@@ -357,7 +357,7 @@ class Target(object):
 
     def variables_string(self, escaped_quotes=False):
         e = ''
-        for k, v in self.variables.iteritems():
+        for k, v in self.variables.items():
             if escaped_quotes:
                 v = v.replace('"', '\\"')
             e += '%s=%s ' % (k, v)
@@ -644,7 +644,7 @@ class Tree(object):
                 if 'option_defaults' in dep.cscript:
                     options = dep.cscript['option_defaults']()
                     if len(d) > 2:
-                        for k, v in d[2].iteritems():
+                        for k, v in d[2].items():
                             options[k] = v
 
                 dep.build(options)
@@ -686,7 +686,7 @@ def main():
 
     one_of = "Command is one of:\n"
     summary = ""
-    for k, v in commands.iteritems():
+    for k, v in commands.items():
         one_of += "\t%s\t%s\n" % (k, v)
         summary += k + " "
 
@@ -834,11 +834,11 @@ def main():
                     v = Version(s[2])
                     if v.micro == 0:
                         if last is not None and len(changes) > 0:
-                            print >>html,"<h2>Changes between version %s and %s</h2>" % (s[2], last)
-                            print >>html,"<ul>"
+                            print("<h2>Changes between version %s and %s</h2>" % (s[2], last), file=html)
+                            print("<ul>", file=html)
                             for c in changes:
-                                print >>html,"<li>%s" % c
-                            print >>html,"</ul>"
+                                print("<li>%s" % c, file=html)
+                            print("</ul>", file=html)
                         last = s[2]
                         changes = []
                         versions -= 1
@@ -903,7 +903,7 @@ def main():
                             if args.major is None or v.major == args.major:
                                 latest = v
 
-        print latest
+        print(latest)
         target.cleanup()
 
     elif globals.command == 'test':
@@ -936,7 +936,7 @@ def main():
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
         with TreeDirectory(tree):
-            print command_and_read('git rev-parse HEAD').readline().strip()[:7]
+            print(command_and_read('git rev-parse HEAD').readline().strip()[:7])
         target.cleanup()
 
     elif globals.command == 'checkout':
@@ -956,5 +956,5 @@ def main():
 try:
     main()
 except Error as e:
-    print >>sys.stderr,'cdist: %s' % str(e)
+    print('cdist: %s' % str(e), file=sys.stderr)
     sys.exit(1)
