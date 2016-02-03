@@ -542,6 +542,11 @@ def target_factory(s, debug, work):
         if len(p) != 3:
             raise Error("Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s)
         target = ChrootTarget(p[0], p[1], int(p[2]), work)
+    elif s.startswith('arch-'):
+        p = s.split('-')
+        if len(p) != 2:
+            raise Error("Bad Arch target name `%s'; must be arch-32 or arch-64")
+        target = ChrootTarget(p[0], None, p[1], work)
     elif s == 'raspbian':
         target = ChrootTarget(s, None, None, work)
     elif s == 'host':
