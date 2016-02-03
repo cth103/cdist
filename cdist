@@ -627,7 +627,7 @@ class Tree(object):
         proj = '%s/src/%s' % (target.directory, self.name)
 
         self.cscript = {}
-        execfile('%s/cscript' % proj, self.cscript)
+        exec(open('%s/cscript' % proj).read(), self.cscript)
 
         if os.path.exists('%s/wscript' % proj):
             v = read_wscript_variable(proj, "VERSION");
