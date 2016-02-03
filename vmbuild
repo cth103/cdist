@@ -27,11 +27,9 @@ esac
 nohup vboxheadless --startvm $target &
 vbox=$!
 sleep 10
-ssh -p $port carl@localhost "rm -rf fedora-*"
-echo "run cdist..."
+ssh -p $port carl@localhost "rm -rf fedora-* arch-*"
 ssh -p $port carl@localhost cdist -p dcpomatic -c $checkout -t host package
 if [ "$output" != "" ]; then
-    echo "copy from vm to $output..."
     tmp=/var/tmp/copy.$$
     mkdir -p $tmp
     scp -P $port carl@localhost:$target/* $tmp/
