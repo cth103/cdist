@@ -1,9 +1,23 @@
 #!/usr/bin/python
 
 import argparse
+import subprocess
+import shlex
+import time
+import os
+import tempfile
+import shutil
+
+class Error(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return self.value
+    def __repr__(self):
+        return str(self)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('command', help=summary)
+parser.add_argument('command')
 parser.add_argument('-p', '--project', help='project name')
 parser.add_argument('--minor', help='minor version number bump', action='store_true')
 parser.add_argument('--micro', help='micro version number bump', action='store_true')
@@ -18,7 +32,7 @@ parser.add_argument('-w', '--work', help='override default work directory')
 parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
 args = parser.parse_args()
 
-cdist_cmd = 'cdist %s -t host ' % command
+cdist_cmd = 'cdist %s -t host ' % args.command
 if args.project is not None:
     cdist_cmd += '-p %s ' % args.project
 if args.minor is True:
@@ -53,17 +67,20 @@ ports = { 'fedora-22-32': 2000,
           'fedora-23-64': 2003,
           'arch-64': 2004 }
 
-vbox = subprocess.Popen(shlex.split('nohup vboxheadless --startvm %s &' % args.target), shell=True)
+vbox = subprocess.Popen('vboxheadless --startvm %s' % args.target, shell=True)
 time.sleep(10)
 command('ssh -p %d carl@localhost "rm -rf fedora-* arch-*"' % ports[args.target])
-command('ssh -p %d carl@localhost %se' % (ports[args.target], cdist_cmd))
+command('ssh -p %d carl@localhost %s' % (ports[args.target], cdist_cmd))
 if args.output is not None:
     tmp = tempfile.mkdtemp()
-    command('scp -P %d carl@localhost:%s/* %s/' % (ports[target], target, tmp)
+    command('scp -P %d carl@localhost:%s/* %s/' % (ports[args.target], args.target, tmp))
     command('scp %s/*.rpm %s/' % (tmp, args.output))
     shutil.rmtree(tmp)
 
-command('ssh -p $port carl@localhost "sudo /sbin/poweroff"')
+try:
+    command('ssh -p %d carl@localhost "sudo /sbin/poweroff"' % ports[args.target])
+except Error:
+    pass
 
 print("wait for vm to terminate...")
 vbox.wait()
