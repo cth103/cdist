@@ -1,0 +1,69 @@
+#!/usr/bin/python
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('command', help=summary)
+parser.add_argument('-p', '--project', help='project name')
+parser.add_argument('--minor', help='minor version number bump', action='store_true')
+parser.add_argument('--micro', help='micro version number bump', action='store_true')
+parser.add_argument('--major', help='major version to return with latest', type=int)
+parser.add_argument('-c', '--checkout', help='string to pass to git for checkout')
+parser.add_argument('-o', '--output', help='output directory', default='.')
+parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
+parser.add_argument('-t', '--target', help='target')
+parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
+parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
+parser.add_argument('-w', '--work', help='override default work directory')
+parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
+args = parser.parse_args()
+
+cdist_cmd = 'cdist %s -t host ' % command
+if args.project is not None:
+    cdist_cmd += '-p %s ' % args.project
+if args.minor is True:
+    cdist_cmd += '--minor '
+if args.micro is True:
+    cdist_cmd += '--micro '
+if args.major is True:
+    cdist_cmd += '--major '
+if args.checkout is not None:
+    cdist_cmd += '--checkout %s ' % args.checkout
+if args.output is not None:
+    cdist_cmd += '--output %s ' % args.output
+if args.quiet is True:
+    cdist_cmd += '--quiet '
+if args.keep is True:
+    cdist_cmd += '--keep '
+if args.debug is True:
+    cdist_cmd += '--debug '
+if args.work is not None:
+    cdist_cmd += '--work %s ' % args.work
+if args.git_prefix is not None:
+    cdist_cmd += '--git-prefix %s ' % args.git_prefix
+
+def command(c):
+    r = os.system(c)
+    if (r >> 8):
+        raise Error('command %s failed' % c)
+
+ports = { 'fedora-22-32': 2000,
+          'fedora-22-64': 2001,
+          'fedora-23-32': 2002,
+          'fedora-23-64': 2003,
+          'arch-64': 2004 }
+
+vbox = subprocess.Popen(shlex.split('nohup vboxheadless --startvm %s &' % args.target), shell=True)
+time.sleep(10)
+command('ssh -p %d carl@localhost "rm -rf fedora-* arch-*"' % ports[args.target])
+command('ssh -p %d carl@localhost %se' % (ports[args.target], cdist_cmd))
+if args.output is not None:
+    tmp = tempfile.mkdtemp()
+    command('scp -P %d carl@localhost:%s/* %s/' % (ports[target], target, tmp)
+    command('scp %s/*.rpm %s/' % (tmp, args.output))
+    shutil.rmtree(tmp)
+
+command('ssh -p $port carl@localhost "sudo /sbin/poweroff"')
+
+print("wait for vm to terminate...")
+vbox.wait()
