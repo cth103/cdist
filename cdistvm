@@ -73,8 +73,8 @@ command('ssh -p %d carl@localhost "rm -rf cdistvm"' % ports[args.target])
 command('ssh -p %d carl@localhost %s' % (ports[args.target], cdist_cmd))
 if args.command in ['package', 'doxygen', 'manual', 'changelog', 'pot']:
     tmp = tempfile.mkdtemp()
-    command('scp -P %d carl@localhost:cdistvm/* %s/' % (ports[args.target], tmp))
-    command('scp %s/* %s/' % (tmp, args.output))
+    command('scp -r -P %d carl@localhost:cdistvm/* %s/' % (ports[args.target], tmp))
+    command('scp -r %s/* %s/' % (tmp, args.output))
     shutil.rmtree(tmp)
 
 try:
