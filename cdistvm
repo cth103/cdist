@@ -69,7 +69,7 @@ ports = { 'fedora-22-32': 2000,
 
 vbox = subprocess.Popen('vboxheadless --startvm %s' % args.target, shell=True)
 time.sleep(10)
-command('ssh -p %d carl@localhost "rm -rf fedora-* arch-*"' % ports[args.target])
+command('ssh -p %d carl@localhost "rm -rf fedora-* arch-* /var/tmp/tmp*"' % ports[args.target])
 command('ssh -p %d carl@localhost %s' % (ports[args.target], cdist_cmd))
 if args.output is not None:
     tmp = tempfile.mkdtemp()
