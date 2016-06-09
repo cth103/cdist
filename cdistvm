@@ -68,8 +68,17 @@ ports = { 'fedora-22-32': 2000,
           'arch-64': 2004 }
 
 vbox = subprocess.Popen('vboxheadless --startvm %s' % args.target, shell=True)
-time.sleep(10)
-command('ssh -p %d carl@localhost "rm -rf cdistvm /var/tmp/tmp*"' % ports[args.target])
+
+ok = False
+while ok == False:
+    time.sleep(10)
+    try:
+        command('ssh -p %d carl@localhost "rm -rf cdistvm /var/tmp/tmp*"' % ports[args.target])
+        ok = True
+    except Error as e:
+        print('Ignoring: %s' % e)
+        pass
+
 command('ssh -p %d carl@localhost %s' % (ports[args.target], cdist_cmd))
 if args.command in ['package', 'doxygen', 'manual', 'changelog', 'pot']:
     tmp = tempfile.mkdtemp()
