@@ -332,10 +332,11 @@ class Target(object):
         tree.build(tree)
         return tree.call('package', tree.version), tree.git_commit
 
-    def test(self, tree):
+    def test(self, tree, test):
+        """test is the test case to run, or None"""
         tree.build_dependencies()
         tree.build()
-        return tree.call('test')
+        return tree.call('test', test)
 
     def set(self, a, b):
         self.variables[a] = b
@@ -713,6 +714,7 @@ def main():
     parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
     parser.add_argument('-w', '--work', help='override default work directory')
     parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
+    parser.add_argument('--test', help='name of test to run (with `test''), defaults to all')
     args = parser.parse_args()
 
     # Override configured stuff
@@ -924,7 +926,7 @@ def main():
             target = target_factory(args.target, args.debug, args.work)
             tree = globals.trees.get(args.project, args.checkout, target)
             with TreeDirectory(tree):
-                target.test(tree)
+                target.test(tree, args.test)
         except Error as e:
             if target is not None:
                 target.cleanup()
