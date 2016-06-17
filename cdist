@@ -374,8 +374,9 @@ class Target(object):
 #
 
 class WindowsTarget(Target):
-    def __init__(self, bits, directory=None):
+    def __init__(self, version, bits, directory=None):
         super(WindowsTarget, self).__init__('windows', directory)
+        self.version = version
         self.bits = bits
 
         self.windows_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
@@ -538,7 +539,13 @@ class SourceTarget(Target):
 def target_factory(s, debug, work):
     target = None
     if s.startswith('windows-'):
-        target = WindowsTarget(int(s.split('-')[1]), work)
+        x = s.split('-')
+        if len(x) == 2:
+            target = WindowsTarget(None, int(x[1]), work)
+        elif len(x) == 3:
+            target = WindowsTarget(x[1], int(x[2]), work)
+        else:
+            raise Error("Bad Windows target name `%s'")
     elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-'):
         p = s.split('-')
         if len(p) != 3:
