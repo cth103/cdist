@@ -424,7 +424,8 @@ class LinuxTarget(Target):
         self.set('CXXFLAGS', '-I%s/include' % self.directory)
         self.set('CPPFLAGS', '')
         self.set('LINKFLAGS', '-L%s/lib' % self.directory)
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib64/pkgconfig:/usr/local/lib/pkgconfig' % (self.directory, self.directory))
+        self.set('PKG_CONFIG_PATH',
+                 '%s/lib/pkgconfig:%s/lib64/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
 class ChrootTarget(LinuxTarget):
