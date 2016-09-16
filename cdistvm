@@ -65,7 +65,10 @@ ports = { 'fedora-22-32': 2000,
           'fedora-22-64': 2001,
           'fedora-23-32': 2002,
           'fedora-23-64': 2003,
-          'arch-64': 2004 }
+          'arch-64': 2004,
+          'fedora-24-32': 2005,
+          'fedora-24-64': 2006,
+        }
 
 vbox = subprocess.Popen('vboxheadless --startvm %s' % args.target, shell=True)
 
