@@ -121,9 +121,9 @@ class Config:
     def get(self, k):
         for o in self.options:
             if o.key == k:
+                if o.value is None:
+                    raise Error('Required setting %s not found' % k)
                 return o.value
-
-        raise Error('Required setting %s not found' % k)
 
     def set(self, k, v):
         for o in self.options:
