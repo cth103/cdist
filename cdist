@@ -306,11 +306,26 @@ class Version:
 
 class Target(object):
     """
-    platform -- platform string (e.g. 'windows', 'linux', 'osx')
-    directory -- directory to work in; if None we will use a temporary directory
-    Temporary directories will be removed after use; specified directories will not.
+    Class representing the target that we are building for.  This is exposed to cscripts,
+    though not all of it is guaranteed 'API'.  cscripts may expect:
+
+    platform: platform string (e.g. 'windows', 'linux', 'osx')
+    parallel: number of parallel jobs to run
+    directory: directory to work in
+    variables: dict of environment variables
+    debug: True to build a debug version, otherwise False
+    set(a, b): set the value of variable 'a' to 'b'
+    unset(a): unset the value of variable 'a'
+    command(c): run the command 'c' in the build environment
+
     """
+
     def __init__(self, platform, directory=None):
+        """
+        platform -- platform string (e.g. 'windows', 'linux', 'osx')
+        directory -- directory to work in; if None we will use a temporary directory
+        Temporary directories will be removed after use; specified directories will not.
+        """
         self.platform = platform
         self.parallel = int(config.get('parallel'))
 
@@ -369,11 +384,16 @@ class Target(object):
         if self.rmdir:
             rmtree(self.directory)
 
-#
-# Windows
-#
 
 class WindowsTarget(Target):
+    """
+    This target exposes the following additional API:
+
+    version: Windows version ('xp' or None)
+    bits: bitness of Windows (32 or 64)
+    windows_prefix: path to Windows environment
+    mingw_path: path to mingw bianries
+    """
     def __init__(self, version, bits, directory=None):
         super(WindowsTarget, self).__init__('windows', directory)
         self.version = version
@@ -414,7 +434,15 @@ class WindowsTarget(Target):
         command('%s %s' % (self.variables_string(), c))
 
 class LinuxTarget(Target):
-    """Parent for Linux targets"""
+    """
+    Parent for Linux targets.
+    This target exposes the following additional API:
+
+    distro: distribution ('debian', 'ubuntu', 'centos' or 'fedora')
+    version: distribution version (e.g. '12.04', '8', '6.5')
+    bits: bitness of the distribution (32 or 64)
+    """
+
     def __init__(self, distro, version, bits, directory=None):
         super(LinuxTarget, self).__init__('linux', directory)
         self.distro = distro
@@ -452,9 +480,27 @@ class HostTarget(LinuxTarget):
     def command(self, c):
         command('%s %s' % (self.variables_string(), c))
 
-#
-# OS X
-#
+
+class DockerTarget(Target):
+    """
+    Build a Docker image.
+
+    This target exposes the following additional API:
+
+    deb: path to Debian 8 .deb
+    """
+    def __init__(self, directory=None):
+        super(DockerTarget, self).__init__('docker', directory)
+        self.debian = ChrootTarget('debian', '8', 64, directory)
+
+    def command(self, c):
+        log('host -> %s' % c)
+        command('%s %s' % (self.variables_string(), c))
+
+    def package(self, project, checkout):
+        self.deb = self.debian.package(project, checkout)
+        return globals.trees.get(project, checkout, self).call('package', tree.version), tree.git_commit
+
 
 class OSXTarget(Target):
     def __init__(self, directory=None):
@@ -582,6 +628,8 @@ def target_factory(s, debug, work):
             target = OSXUniversalTarget(work)
     elif s == 'source':
         target = SourceTarget()
+    elif s == 'docker':
+        target = DockerTarget()
 
     if target is None:
         raise Error("Bad target `%s'" % s)
