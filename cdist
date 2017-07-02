@@ -121,9 +121,9 @@ class Config:
     def get(self, k):
         for o in self.options:
             if o.key == k:
+                if o.value is None:
+                    raise Error('Required setting %s not found' % k)
                 return o.value
-
-        raise Error('Required setting %s not found' % k)
 
     def set(self, k, v):
         for o in self.options:
@@ -306,11 +306,26 @@ class Version:
 
 class Target(object):
     """
-    platform -- platform string (e.g. 'windows', 'linux', 'osx')
-    directory -- directory to work in; if None we will use a temporary directory
-    Temporary directories will be removed after use; specified directories will not.
+    Class representing the target that we are building for.  This is exposed to cscripts,
+    though not all of it is guaranteed 'API'.  cscripts may expect:
+
+    platform: platform string (e.g. 'windows', 'linux', 'osx')
+    parallel: number of parallel jobs to run
+    directory: directory to work in
+    variables: dict of environment variables
+    debug: True to build a debug version, otherwise False
+    set(a, b): set the value of variable 'a' to 'b'
+    unset(a): unset the value of variable 'a'
+    command(c): run the command 'c' in the build environment
+
     """
+
     def __init__(self, platform, directory=None):
+        """
+        platform -- platform string (e.g. 'windows', 'linux', 'osx')
+        directory -- directory to work in; if None we will use a temporary directory
+        Temporary directories will be removed after use; specified directories will not.
+        """
         self.platform = platform
         self.parallel = int(config.get('parallel'))
 
@@ -332,10 +347,11 @@ class Target(object):
         tree.build()
         return tree.call('package', tree.version), tree.git_commit
 
-    def test(self, tree):
+    def test(self, tree, test):
+        """test is the test case to run, or None"""
         tree.build_dependencies()
         tree.build()
-        return tree.call('test')
+        return tree.call('test', test)
 
     def set(self, a, b):
         self.variables[a] = b
@@ -368,18 +384,24 @@ class Target(object):
         if self.rmdir:
             rmtree(self.directory)
 
-#
-# Windows
-#
 
 class WindowsTarget(Target):
-    def __init__(self, bits, directory=None):
+    """
+    This target exposes the following additional API:
+
+    version: Windows version ('xp' or None)
+    bits: bitness of Windows (32 or 64)
+    environment_prefix: path to Windows environment
+    mingw_path: path to mingw binaries
+    """
+    def __init__(self, version, bits, directory=None):
         super(WindowsTarget, self).__init__('windows', directory)
+        self.version = version
         self.bits = bits
 
-        self.windows_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
-        if not os.path.exists(self.windows_prefix):
-            raise Error('windows prefix %s does not exist' % self.windows_prefix)
+        self.environment_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
+        if not os.path.exists(self.environment_prefix):
+            raise Error('environment prefix %s does not exist' % self.environment_prefix)
 
         if self.bits == 32:
             self.mingw_name = 'i686'
@@ -389,16 +411,16 @@ class WindowsTarget(Target):
         self.mingw_path = '%s/%d/bin' % (config.get('mingw_prefix'), self.bits)
         self.mingw_prefixes = ['/%s/%d' % (config.get('mingw_prefix'), self.bits), '%s/%d/%s-w64-mingw32' % (config.get('mingw_prefix'), bits, self.mingw_name)]
 
-        self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.windows_prefix)
+        self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.environment_prefix)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory))
-        self.set('PATH', '%s/bin:%s:%s' % (self.windows_prefix, self.mingw_path, os.environ['PATH']))
+        self.set('PATH', '%s/bin:%s:%s' % (self.environment_prefix, self.mingw_path, os.environ['PATH']))
         self.set('CC', '%s-w64-mingw32-gcc' % self.mingw_name)
         self.set('CXX', '%s-w64-mingw32-g++' % self.mingw_name)
         self.set('LD', '%s-w64-mingw32-ld' % self.mingw_name)
         self.set('RANLIB', '%s-w64-mingw32-ranlib' % self.mingw_name)
         self.set('WINRC', '%s-w64-mingw32-windres' % self.mingw_name)
-        cxx = '-I%s/include -I%s/include' % (self.windows_prefix, self.directory)
-        link = '-L%s/lib -L%s/lib' % (self.windows_prefix, self.directory)
+        cxx = '-I%s/include -I%s/include' % (self.environment_prefix, self.directory)
+        link = '-L%s/lib -L%s/lib' % (self.environment_prefix, self.directory)
         for p in self.mingw_prefixes:
             cxx += ' -I%s/include' % p
             link += ' -L%s/lib' % p
@@ -407,12 +429,23 @@ class WindowsTarget(Target):
         self.set('LINKFLAGS', '"%s"' % link)
         self.set('LDFLAGS', '"%s"' % link)
 
+        # This is for backwards-compatibility
+        self.windows_prefix = self.environment_prefix
+
     def command(self, c):
         log('host -> %s' % c)
         command('%s %s' % (self.variables_string(), c))
 
 class LinuxTarget(Target):
-    """Parent for Linux targets"""
+    """
+    Parent for Linux targets.
+    This target exposes the following additional API:
+
+    distro: distribution ('debian', 'ubuntu', 'centos' or 'fedora')
+    version: distribution version (e.g. '12.04', '8', '6.5')
+    bits: bitness of the distribution (32 or 64)
+    """
+
     def __init__(self, distro, version, bits, directory=None):
         super(LinuxTarget, self).__init__('linux', directory)
         self.distro = distro
@@ -422,7 +455,8 @@ class LinuxTarget(Target):
         self.set('CXXFLAGS', '-I%s/include' % self.directory)
         self.set('CPPFLAGS', '')
         self.set('LINKFLAGS', '-L%s/lib' % self.directory)
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib64/pkgconfig:/usr/local/lib/pkgconfig' % (self.directory, self.directory))
+        self.set('PKG_CONFIG_PATH',
+                 '%s/lib/pkgconfig:%s/lib64/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
 class ChrootTarget(LinuxTarget):
@@ -449,15 +483,34 @@ class HostTarget(LinuxTarget):
     def command(self, c):
         command('%s %s' % (self.variables_string(), c))
 
-#
-# OS X
-#
+
+class DockerTarget(Target):
+    """
+    Build a Docker image.
+
+    This target exposes the following additional API:
+
+    deb: path to Debian 8 .deb
+    """
+    def __init__(self, directory=None):
+        super(DockerTarget, self).__init__('docker', directory)
+        self.debian = ChrootTarget('debian', '8', 64, directory)
+
+    def command(self, c):
+        log('host -> %s' % c)
+        command('%s %s' % (self.variables_string(), c))
+
+    def package(self, project, checkout):
+        self.deb = self.debian.package(project, checkout)
+        return globals.trees.get(project, checkout, self).call('package', tree.version), tree.git_commit
+
 
 class OSXTarget(Target):
     def __init__(self, directory=None):
         super(OSXTarget, self).__init__('osx', directory)
         self.sdk = config.get('osx_sdk')
         self.sdk_prefix = config.get('osx_sdk_prefix')
+        self.environment_prefix = config.get('osx_environment_prefix')
 
     def command(self, c):
         command('%s %s' % (self.variables_string(False), c))
@@ -537,7 +590,13 @@ class SourceTarget(Target):
 def target_factory(s, debug, work):
     target = None
     if s.startswith('windows-'):
-        target = WindowsTarget(int(s.split('-')[1]), work)
+        x = s.split('-')
+        if len(x) == 2:
+            target = WindowsTarget(None, int(x[1]), work)
+        elif len(x) == 3:
+            target = WindowsTarget(x[1], int(x[2]), work)
+        else:
+            raise Error("Bad Windows target name `%s'")
     elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-'):
         p = s.split('-')
         if len(p) != 3:
@@ -573,6 +632,8 @@ def target_factory(s, debug, work):
             target = OSXUniversalTarget(work)
     elif s == 'source':
         target = SourceTarget()
+    elif s == 'docker':
+        target = DockerTarget()
 
     if target is None:
         raise Error("Bad target `%s'" % s)
@@ -718,6 +779,7 @@ def main():
     parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
     parser.add_argument('-w', '--work', help='override default work directory')
     parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
+    parser.add_argument('--test', help='name of test to run (with `test''), defaults to all')
     args = parser.parse_args()
 
     # Override configured stuff
@@ -929,7 +991,7 @@ def main():
             target = target_factory(args.target, args.debug, args.work)
             tree = globals.trees.get(args.project, args.checkout, target)
             with TreeDirectory(tree):
-                target.test(tree)
+                target.test(tree, args.test)
         except Error as e:
             if target is not None:
                 target.cleanup()
