@@ -329,7 +329,7 @@ class Target(object):
     def package(self, project, checkout):
         tree = globals.trees.get(project, checkout, self)
         tree.build_dependencies()
-        tree.build(tree)
+        tree.build()
         return tree.call('package', tree.version), tree.git_commit
 
     def test(self, tree):
@@ -640,12 +640,16 @@ class Tree(object):
         with TreeDirectory(self):
             return self.cscript[function](self.target, *args)
 
-    def build_dependencies(self):
+    def build_dependencies(self, options=None):
         if 'dependencies' in self.cscript:
-            for d in self.cscript['dependencies'](self.target):
+            if len(inspect.getargspec(self.cscript['dependencies']).args) == 2:
+                deps = self.call('dependencies', options)
+            else:
+                deps = self.call('dependencies')
+
+            for d in deps:
                 log('Building dependency %s %s of %s' % (d[0], d[1], self.name))
                 dep = globals.trees.get(d[0], d[1], self.target)
-                dep.build_dependencies()
 
                 # Make the options to pass in from the option_defaults of the thing
                 # we are building and any options specified by the parent.
@@ -656,6 +660,7 @@ class Tree(object):
                         for k, v in d[2].items():
                             options[k] = v
 
+                dep.build_dependencies(options)
                 dep.build(options)
 
     def build(self, options=None):
