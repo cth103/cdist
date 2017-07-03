@@ -720,7 +720,7 @@ class Tree(object):
                 # we are building and any options specified by the parent.
 
                 if 'option_defaults' in dep.cscript:
-                    for k, v in dep.cscript['option_defaults'].items():
+                    for k, v in dep.cscript['option_defaults']().items():
                         to[k] = v
 
                 if len(d) > 2:
