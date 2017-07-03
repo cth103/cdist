@@ -701,25 +701,37 @@ class Tree(object):
         with TreeDirectory(self):
             return self.cscript[function](self.target, *args)
 
-    def build_dependencies(self, dry_run):
-        if 'dependencies' in self.cscript:
-            for d in self.call('dependencies'):
-                log('Building dependency %s %s of %s' % (d[0], d[1], self.name))
-                dep = globals.trees.get(d[0], d[1], self.target)
+    def build_dependencies(self, dry_run, options=None):
 
-                options = dict()
-                # Make the options to pass in from the option_defaults of the thing
-                # we are building and any options specified by the parent.
-                if 'option_defaults' in dep.cscript:
-                    for k, v in dep.cscript['option_defaults']().items():
-                        options[k] = v
+        if not 'dependencies' in self.cscript:
+            return
 
-                if len(d) > 2:
-                    for k, v in d[2].items():
-                        options[k] = v
+        if len(inspect.getargspec(self.cscript['dependencies']).args) == 2:
+            deps = self.call('dependencies', options)
+        else:
+            deps = self.call('dependencies')
 
-                dep.build_dependencies(dry_run, options)
-                dep.build(dry_run, options)
+        for d in deps:
+            dep = globals.trees.get(d[0], d[1], self.target)
+
+            options = dict()
+            # Make the options to pass in from the option_defaults of the thing
+            # we are building and any options specified by the parent.
+            if 'option_defaults' in dep.cscript:
+                for k, v in dep.cscript['option_defaults']().items():
+                    options[k] = v
+
+            if len(d) > 2:
+                for k, v in d[2].items():
+                    options[k] = v
+
+            msg = 'Building dependency %s %s of %s' % (d[0], d[1], self.name)
+            if len(options) > 0:
+                msg += ' with options %s' % options
+            log(msg)
+
+            dep.build_dependencies(dry_run, options)
+            dep.build(dry_run, options)
 
     def build(self, dry_run, options=None):
         if self.built:
