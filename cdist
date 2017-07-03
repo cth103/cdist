@@ -708,6 +708,10 @@ class Tree(object):
             else:
                 deps = self.call('dependencies')
 
+            to = options
+            if to is None:
+                to = dict()
+
             for d in deps:
                 log('Building dependency %s %s of %s' % (d[0], d[1], self.name))
                 dep = globals.trees.get(d[0], d[1], self.target)
@@ -717,14 +721,14 @@ class Tree(object):
 
                 if 'option_defaults' in dep.cscript:
                     for k, v in dep.cscript['option_defaults'].items():
-                        options[k] = v
+                        to[k] = v
 
                 if len(d) > 2:
                     for k, v in d[2].items():
-                        options[k] = v
+                        to[k] = v
 
-                dep.build_dependencies(dry_run, options)
-                dep.build(dry_run, options)
+                dep.build_dependencies(dry_run, to)
+                dep.build(dry_run, to)
 
     def build(self, dry_run, options=None):
         if self.built:
