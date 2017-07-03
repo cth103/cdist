@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-#    Copyright (C) 2012-2015 Carl Hetherington <cth@carlh.net>
+#    Copyright (C) 2012-2017 Carl Hetherington <cth@carlh.net>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -62,6 +62,7 @@ class Trees:
 class Globals:
     quiet = False
     command = None
+    dry_run = False
     trees = Trees()
 
 globals = Globals()
@@ -140,6 +141,7 @@ def log(m):
         print('\x1b[33m* %s\x1b[0m' % m)
 
 def scp_escape(n):
+    """Escape a host:filename string for use with an scp command"""
     s = n.split(':')
     assert(len(s) == 1 or len(s) == 2)
     if len(s) == 2:
@@ -156,6 +158,10 @@ def copyfile(a, b):
     command('scp %s %s' % (scp_escape(a), scp_escape(b)))
 
 def makedirs(d):
+    """
+    Make directories either locally or on a remote host; remotely if
+    d includes a colon, otherwise locally.
+    """
     if d.find(':') == -1:
         os.makedirs(d)
     else:
@@ -341,16 +347,16 @@ class Target(object):
         self.variables = {}
         self.debug = False
 
-    def package(self, project, checkout, dry_run):
+    def package(self, project, checkout):
         tree = globals.trees.get(project, checkout, self)
-        tree.build_dependencies(dry_run)
-        tree.build(dry_run)
+        tree.build_dependencies()
+        tree.build()
         return tree.call('package', tree.version), tree.git_commit
 
     def test(self, tree, test):
         """test is the test case to run, or None"""
-        tree.build_dependencies(args.dry_run)
-        tree.build(args.dry_run)
+        tree.build_dependencies()
+        tree.build()
         return tree.call('test', test)
 
     def set(self, a, b):
@@ -500,8 +506,8 @@ class DockerTarget(Target):
         log('host -> %s' % c)
         command('%s %s' % (self.variables_string(), c))
 
-    def package(self, project, checkout, dry_run):
-        self.deb = self.debian.package(project, checkout, dry_run)
+    def package(self, project, checkout):
+        self.deb = self.debian.package(project, checkout)
         return globals.trees.get(project, checkout, self).call('package', tree.version), tree.git_commit
 
 
@@ -539,7 +545,7 @@ class OSXSingleTarget(OSXTarget):
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
         self.set('MACOSX_DEPLOYMENT_TARGET', config.get('osx_sdk'))
 
-    def package(self, project, checkout, dry_run):
+    def package(self, project, checkout):
         raise Error('cannot package non-universal OS X versions')
 
 
@@ -547,13 +553,13 @@ class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
 
-    def package(self, project, checkout, dry_run):
+    def package(self, project, checkout):
 
         for b in [32, 64]:
             target = OSXSingleTarget(b, os.path.join(self.directory, '%d' % b))
             tree = globals.trees.get(project, checkout, target)
-            tree.build_dependencies(dry_run)
-            tree.build(dry_run)
+            tree.build_dependencies()
+            tree.build()
 
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
@@ -571,7 +577,7 @@ class SourceTarget(Target):
     def cleanup(self):
         rmtree(self.directory)
 
-    def package(self, project, checkout, dry_run):
+    def package(self, project, checkout):
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
             name = read_wscript_variable(os.getcwd(), 'APPNAME')
@@ -701,7 +707,7 @@ class Tree(object):
         with TreeDirectory(self):
             return self.cscript[function](self.target, *args)
 
-    def build_dependencies(self, dry_run, options=None):
+    def build_dependencies(self, options=None):
 
         if not 'dependencies' in self.cscript:
             return
@@ -709,6 +715,7 @@ class Tree(object):
         if len(inspect.getargspec(self.cscript['dependencies']).args) == 2:
             deps = self.call('dependencies', options)
         else:
+            log("Deprecated cscipt dependencies() method with no parameter")
             deps = self.call('dependencies')
 
         for d in deps:
@@ -730,16 +737,16 @@ class Tree(object):
                 msg += ' with options %s' % options
             log(msg)
 
-            dep.build_dependencies(dry_run, options)
-            dep.build(dry_run, options)
+            dep.build_dependencies(options)
+            dep.build(options)
 
-    def build(self, dry_run, options=None):
+    def build(self, options=None):
         if self.built:
             return
 
         variables = copy.copy(self.target.variables)
 
-        if not dry_run:
+        if not globals.dry_run:
             if len(inspect.getargspec(self.cscript['build']).args) == 2:
                 self.call('build', options)
             else:
@@ -814,6 +821,7 @@ def main():
 
     globals.quiet = args.quiet
     globals.command = args.command
+    globals.dry_run = args.dry_run
 
     if not globals.command in commands:
         e = 'command must be one of:\n' + one_of
@@ -825,8 +833,8 @@ def main():
 
         target = target_factory(args.target, args.debug, args.work)
         tree = globals.trees.get(args.project, args.checkout, target)
-        tree.build_dependencies(dry_run)
-        tree.build(dry_run)
+        tree.build_dependencies()
+        tree.build()
         if not args.keep:
             target.cleanup()
 
@@ -835,7 +843,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args.target, args.debug, args.work)
-        packages, git_commit = target.package(args.project, args.checkout, args.dry_run)
+        packages, git_commit = target.package(args.project, args.checkout)
         if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
             packages = [packages]
 
