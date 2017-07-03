@@ -783,7 +783,7 @@ def main():
     parser.add_argument('-w', '--work', help='override default work directory')
     parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
     parser.add_argument('--test', help='name of test to run (with `test''), defaults to all')
-    parser.add_argument('-n', '--dry-run', help='run the process without building anything')
+    parser.add_argument('-n', '--dry-run', help='run the process without building anything', action='store_true')
     args = parser.parse_args()
 
     # Override configured stuff
