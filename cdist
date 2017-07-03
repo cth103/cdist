@@ -343,14 +343,14 @@ class Target(object):
 
     def package(self, project, checkout):
         tree = globals.trees.get(project, checkout, self)
-        tree.build_dependencies()
-        tree.build()
+        tree.build_dependencies(args.dry_run)
+        tree.build(args.dry_run)
         return tree.call('package', tree.version), tree.git_commit
 
     def test(self, tree, test):
         """test is the test case to run, or None"""
-        tree.build_dependencies()
-        tree.build()
+        tree.build_dependencies(args.dry_run)
+        tree.build(args.dry_run)
         return tree.call('test', test)
 
     def set(self, a, b):
@@ -552,8 +552,8 @@ class OSXUniversalTarget(OSXTarget):
         for b in [32, 64]:
             target = OSXSingleTarget(b, os.path.join(self.directory, '%d' % b))
             tree = globals.trees.get(project, checkout, target)
-            tree.build_dependencies()
-            tree.build()
+            tree.build_dependencies(False)
+            tree.build(False)
 
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
@@ -701,7 +701,7 @@ class Tree(object):
         with TreeDirectory(self):
             return self.cscript[function](self.target, *args)
 
-    def build_dependencies(self, options=None):
+    def build_dependencies(self, dry_run, options=None):
         if 'dependencies' in self.cscript:
             if len(inspect.getargspec(self.cscript['dependencies']).args) == 2:
                 deps = self.call('dependencies', options)
@@ -714,26 +714,29 @@ class Tree(object):
 
                 # Make the options to pass in from the option_defaults of the thing
                 # we are building and any options specified by the parent.
-                options = {}
+
                 if 'option_defaults' in dep.cscript:
-                    options = dep.cscript['option_defaults']()
-                    if len(d) > 2:
-                        for k, v in d[2].items():
-                            options[k] = v
+                    for k, v in dep.cscript['option_defaults'].items():
+                        options[k] = v
 
-                dep.build_dependencies(options)
-                dep.build(options)
+                if len(d) > 2:
+                    for k, v in d[2].items():
+                        options[k] = v
 
-    def build(self, options=None):
+                dep.build_dependencies(dry_run, options)
+                dep.build(dry_run, options)
+
+    def build(self, dry_run, options=None):
         if self.built:
             return
 
         variables = copy.copy(self.target.variables)
 
-        if len(inspect.getargspec(self.cscript['build']).args) == 2:
-            self.call('build', options)
-        else:
-            self.call('build')
+        if not dry_run:
+            if len(inspect.getargspec(self.cscript['build']).args) == 2:
+                self.call('build', options)
+            else:
+                self.call('build')
 
         self.target.variables = variables
         self.built = True
@@ -780,6 +783,7 @@ def main():
     parser.add_argument('-w', '--work', help='override default work directory')
     parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
     parser.add_argument('--test', help='name of test to run (with `test''), defaults to all')
+    parser.add_argument('-n', '--dry-run', help='run the process without building anything')
     args = parser.parse_args()
 
     # Override configured stuff
@@ -814,8 +818,8 @@ def main():
 
         target = target_factory(args.target, args.debug, args.work)
         tree = globals.trees.get(args.project, args.checkout, target)
-        tree.build_dependencies()
-        tree.build()
+        tree.build_dependencies(dry_run)
+        tree.build(dry_run)
         if not args.keep:
             target.cleanup()
 
