@@ -341,10 +341,10 @@ class Target(object):
         self.variables = {}
         self.debug = False
 
-    def package(self, project, checkout):
+    def package(self, project, checkout, dry_run):
         tree = globals.trees.get(project, checkout, self)
-        tree.build_dependencies(args.dry_run)
-        tree.build(args.dry_run)
+        tree.build_dependencies(dry_run)
+        tree.build(dry_run)
         return tree.call('package', tree.version), tree.git_commit
 
     def test(self, tree, test):
@@ -500,8 +500,8 @@ class DockerTarget(Target):
         log('host -> %s' % c)
         command('%s %s' % (self.variables_string(), c))
 
-    def package(self, project, checkout):
-        self.deb = self.debian.package(project, checkout)
+    def package(self, project, checkout, dry_run):
+        self.deb = self.debian.package(project, checkout, dry_run)
         return globals.trees.get(project, checkout, self).call('package', tree.version), tree.git_commit
 
 
@@ -539,7 +539,7 @@ class OSXSingleTarget(OSXTarget):
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
         self.set('MACOSX_DEPLOYMENT_TARGET', config.get('osx_sdk'))
 
-    def package(self, project, checkout):
+    def package(self, project, checkout, dry_run):
         raise Error('cannot package non-universal OS X versions')
 
 
@@ -547,13 +547,13 @@ class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
 
-    def package(self, project, checkout):
+    def package(self, project, checkout, dry_run):
 
         for b in [32, 64]:
             target = OSXSingleTarget(b, os.path.join(self.directory, '%d' % b))
             tree = globals.trees.get(project, checkout, target)
-            tree.build_dependencies(False)
-            tree.build(False)
+            tree.build_dependencies(dry_run)
+            tree.build(dry_run)
 
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
@@ -571,7 +571,7 @@ class SourceTarget(Target):
     def cleanup(self):
         rmtree(self.directory)
 
-    def package(self, project, checkout):
+    def package(self, project, checkout, dry_run):
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
             name = read_wscript_variable(os.getcwd(), 'APPNAME')
@@ -828,7 +828,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args.target, args.debug, args.work)
-        packages, git_commit = target.package(args.project, args.checkout)
+        packages, git_commit = target.package(args.project, args.checkout, args.dry_run)
         if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
             packages = [packages]
 
