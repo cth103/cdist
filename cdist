@@ -92,8 +92,7 @@ class BoolOption(object):
 
 class Config:
     def __init__(self):
-        self.options = [ Option('linux_chroot_prefix'),
-                         Option('windows_environment_prefix'),
+        self.options = [ Option('windows_environment_prefix'),
                          Option('mingw_prefix'),
                          Option('git_prefix'),
                          Option('osx_build_host'),
@@ -444,7 +443,7 @@ class WindowsTarget(Target):
 
 class LinuxTarget(Target):
     """
-    Parent for Linux targets.
+    Build for Linux in a docker container.
     This target exposes the following additional API:
 
     distro: distribution ('debian', 'ubuntu', 'centos' or 'fedora')
@@ -452,7 +451,7 @@ class LinuxTarget(Target):
     bits: bitness of the distribution (32 or 64)
     """
 
-    def __init__(self, distro, version, bits, directory=None):
+    def __init__(self, distro, version, bits, directory="/cdist"):
         super(LinuxTarget, self).__init__('linux', directory)
         self.distro = distro
         self.version = version
@@ -465,50 +464,25 @@ class LinuxTarget(Target):
                  '%s/lib/pkgconfig:%s/lib64/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
-class ChrootTarget(LinuxTarget):
-    """Build in a chroot"""
-    def __init__(self, distro, version, bits, directory=None):
-        super(ChrootTarget, self).__init__(distro, version, bits, directory)
-        # e.g. ubuntu-14.04-64
-        if self.version is not None and self.bits is not None:
-            self.chroot = '%s-%s-%d' % (self.distro, self.version, self.bits)
-        else:
-            self.chroot = self.distro
-        # e.g. /home/carl/Environments/ubuntu-14.04-64
-        self.chroot_prefix = '%s/%s' % (config.get('linux_chroot_prefix'), self.chroot)
-
-    def command(self, c):
-        command('%s schroot -c %s -p -- %s' % (self.variables_string(), self.chroot, c))
-
-
-class HostTarget(LinuxTarget):
-    """Build directly on the host"""
-    def __init__(self, distro, version, bits, directory=None):
-        super(HostTarget, self).__init__(distro, version, bits, directory)
-
-    def command(self, c):
-        command('%s %s' % (self.variables_string(), c))
-
-
-class DockerTarget(Target):
-    """
-    Build a Docker image.
-
-    This target exposes the following additional API:
-
-    deb: path to Debian 8 .deb
-    """
-    def __init__(self, directory=None):
-        super(DockerTarget, self).__init__('docker', directory)
-        self.debian = ChrootTarget('debian', '8', 64, directory)
-
-    def command(self, c):
-        log('host -> %s' % c)
-        command('%s %s' % (self.variables_string(), c))
+class DockerTarget(LinuxTarget):
+    """Build in a docker container"""
+    def __init__(self, distro, version, bits, directory="/cdist"):
+        super(DockerTarget, self).__init__(distro, version, bits, directory)
 
     def package(self, project, checkout):
-        self.deb = self.debian.package(project, checkout)
-        return globals.trees.get(project, checkout, self).call('package', tree.version), tree.git_commit
+        ch = ''
+        if checkout is not None:
+            ch = '-c %s' % checkout
+        command('docker run -t %s-%s-%s /bin/bash -c "cdist -p %s -t host %s package"' % (self.distro, self.version, self.bits, project, ch))
+
+
+class DirectTarget(LinuxTarget):
+    """Build directly in the current environment"""
+    def __init__(self, distro, version, bits, directory=None):
+        super(DirectTarget, self).__init__(distro, version, bits, directory)
+
+    def command(self, c):
+        command('%s %s' % (self.variables_string(), c))
 
 
 class OSXTarget(Target):
@@ -607,28 +581,17 @@ def target_factory(s, debug, work):
         p = s.split('-')
         if len(p) != 3:
             raise Error("Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s)
-        target = ChrootTarget(p[0], p[1], int(p[2]), work)
+        if args.direct:
+            target = DirectTarget(p[0], p[1], int(p[2]), work)
+        else:
+            target = DockerTarget(p[0], p[1], int(p[2]), work)
     elif s.startswith('arch-'):
         p = s.split('-')
         if len(p) != 2:
             raise Error("Bad Arch target name `%s'; must be arch-32 or arch-64")
-        target = ChrootTarget(p[0], None, p[1], work)
+        target = DockerTarget(p[0], None, p[1], work)
     elif s == 'raspbian':
-        target = ChrootTarget(s, None, None, work)
-    elif s == 'host':
-        if command_and_read('uname -m').read().strip() == 'x86_64':
-            bits = 64
-        else:
-            bits = 32
-        try:
-            f = open('/etc/fedora-release', 'r')
-            l = f.readline().strip().split()
-            target = HostTarget("fedora", l[2], bits, work)
-        except Exception as e:
-            if os.path.exists('/etc/arch-release'):
-                target = HostTarget("arch", None, bits, work)
-            else:
-                raise Error("could not identify distribution for `host' target (%s)" % e)
+        target = DockerTarget(s, None, None, work)
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
@@ -771,7 +734,7 @@ def main():
         "doxygen": "build the project's Doxygen documentation",
         "latest": "print out the latest version",
         "test": "run the project's unit tests",
-        "shell": "build the project then start a shell in its chroot",
+        "shell": "build the project then start a shell",
         "checkout": "check out the project",
         "revision": "print the head git revision number"
     }
@@ -792,6 +755,7 @@ def main():
     parser.add_argument('-o', '--output', help='output directory', default='.')
     parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
     parser.add_argument('-t', '--target', help='target')
+    parser.add_argument('-d', '--direct', help='build in the current environment')
     parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
     parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
     parser.add_argument('-w', '--work', help='override default work directory')
