@@ -473,7 +473,8 @@ class DockerTarget(LinuxTarget):
         ch = ''
         if checkout is not None:
             ch = '-c %s' % checkout
-        command('docker run -t %s-%s-%s /bin/bash -c "cdist -p %s -t host %s package"' % (self.distro, self.version, self.bits, project, ch))
+        target = '%s-%s-%s' % (self.distro, self.version, self.bits)
+        command('docker run -t %s /bin/bash -c "cdist -p %s -t %s -d %s package"' % (target, project, target, ch))
 
 
 class DirectTarget(LinuxTarget):
@@ -567,7 +568,7 @@ class SourceTarget(Target):
 #    or osx-{32,64}
 #    or source
 # @param debug True to build with debugging symbols (where possible)
-def target_factory(s, debug, work):
+def target_factory(s, direct, debug, work):
     target = None
     if s.startswith('windows-'):
         x = s.split('-')
@@ -581,7 +582,7 @@ def target_factory(s, debug, work):
         p = s.split('-')
         if len(p) != 3:
             raise Error("Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s)
-        if args.direct:
+        if direct:
             target = DirectTarget(p[0], p[1], int(p[2]), work)
         else:
             target = DockerTarget(p[0], p[1], int(p[2]), work)
@@ -755,7 +756,7 @@ def main():
     parser.add_argument('-o', '--output', help='output directory', default='.')
     parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
     parser.add_argument('-t', '--target', help='target')
-    parser.add_argument('-d', '--direct', help='build in the current environment')
+    parser.add_argument('-d', '--direct', help='build in the current environment', action='store_true')
     parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
     parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
     parser.add_argument('-w', '--work', help='override default work directory')
@@ -795,7 +796,7 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args.target, args.debug, args.work)
+        target = target_factory(args.target, args.direct, args.debug, args.work)
         tree = globals.trees.get(args.project, args.checkout, target)
         tree.build_dependencies()
         tree.build()
@@ -806,7 +807,7 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args.target, args.debug, args.work)
+        target = target_factory(args.target, args.direct, args.debug, args.work)
         packages, git_commit = target.package(args.project, args.checkout)
         if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
             packages = [packages]
@@ -971,7 +972,7 @@ def main():
 
         target = None
         try:
-            target = target_factory(args.target, args.debug, args.work)
+            target = target_factory(args.target, args.direct, args.debug, args.work)
             tree = globals.trees.get(args.project, args.checkout, target)
             with TreeDirectory(tree):
                 target.test(tree, args.test)
@@ -987,7 +988,7 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args.target, args.debug, args.work)
+        target = target_factory(args.target, args.direct, args.debug, args.work)
         target.command('bash')
 
     elif globals.command == 'revision':
