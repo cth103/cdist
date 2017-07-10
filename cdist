@@ -346,11 +346,12 @@ class Target(object):
         self.variables = {}
         self.debug = False
 
-    def package(self, project, checkout):
+    def package(self, project, checkout, output_dir):
         tree = globals.trees.get(project, checkout, self)
         tree.build_dependencies()
         tree.build()
-        return tree.call('package', tree.version), tree.git_commit
+        for p in tree.call('package', tree.version):
+            copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
 
     def test(self, tree, test):
         """test is the test case to run, or None"""
@@ -451,7 +452,7 @@ class LinuxTarget(Target):
     bits: bitness of the distribution (32 or 64)
     """
 
-    def __init__(self, distro, version, bits, directory="/cdist"):
+    def __init__(self, distro, version, bits, directory=None):
         super(LinuxTarget, self).__init__('linux', directory)
         self.distro = distro
         self.version = version
@@ -466,16 +467,24 @@ class LinuxTarget(Target):
 
 class DockerTarget(LinuxTarget):
     """Build in a docker container"""
-    def __init__(self, distro, version, bits, directory="/cdist"):
+    def __init__(self, distro, version, bits, directory=None):
         super(DockerTarget, self).__init__(distro, version, bits, directory)
 
-    def package(self, project, checkout):
+    def package(self, project, checkout, output_dir):
         ch = ''
         if checkout is not None:
             ch = '-c %s' % checkout
         target = '%s-%s-%s' % (self.distro, self.version, self.bits)
-        command('docker run -t %s /bin/bash -c "cdist -p %s -t %s -d %s package"' % (target, project, target, ch))
-
+        container = command_and_read('docker run -itd %s /bin/bash' % target).read().strip()
+        command('docker exec -t %s /bin/bash -c "cdist -p %s -t %s -d %s package -w /cdist"' % (container, project, target, ch))
+        # I can't get wildcards to work with docker cp
+        debs = command_and_read('docker exec -t %s ls -1 /%s' % (container, target)).read().split('\n')
+        makedirs(output_dir)
+        for d in debs:
+            d = d.strip()
+            if len(d) > 0:
+                command('docker cp %s:/%s/%s %s' % (container, target, d, output_dir))
+        command('docker kill %s' % container)
 
 class DirectTarget(LinuxTarget):
     """Build directly in the current environment"""
@@ -520,7 +529,7 @@ class OSXSingleTarget(OSXTarget):
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
         self.set('MACOSX_DEPLOYMENT_TARGET', config.get('osx_sdk'))
 
-    def package(self, project, checkout):
+    def package(self, project, checkout, output_dir):
         raise Error('cannot package non-universal OS X versions')
 
 
@@ -528,7 +537,7 @@ class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
 
-    def package(self, project, checkout):
+    def package(self, project, checkout, output_dir):
 
         for b in [32, 64]:
             target = OSXSingleTarget(b, os.path.join(self.directory, '%d' % b))
@@ -538,7 +547,8 @@ class OSXUniversalTarget(OSXTarget):
 
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
-            return tree.call('package', tree.version), tree.git_commit
+            for p in tree.call('package', tree.version):
+                copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
 
 class SourceTarget(Target):
     """Build a source .tar.bz2"""
@@ -552,19 +562,20 @@ class SourceTarget(Target):
     def cleanup(self):
         rmtree(self.directory)
 
-    def package(self, project, checkout):
+    def package(self, project, checkout, output_dir):
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
             name = read_wscript_variable(os.getcwd(), 'APPNAME')
             command('./waf dist')
-            return os.path.abspath('%s-%s.tar.bz2' % (name, tree.version)), tree.git_commit
-
+            p = os.path.abspath('%s-%s.tar.bz2' % (name, tree.version))
+            copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
 
 # @param s Target string:
 #       windows-{32,64}
 #    or ubuntu-version-{32,64}
 #    or debian-version-{32,64}
 #    or centos-version-{32,64}
+#    or fedora-version-{32,64}
 #    or osx-{32,64}
 #    or source
 # @param debug True to build with debugging symbols (where possible)
@@ -578,7 +589,7 @@ def target_factory(s, direct, debug, work):
             target = WindowsTarget(x[1], int(x[2]), work)
         else:
             raise Error("Bad Windows target name `%s'")
-    elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-'):
+    elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-') or s.startswith('fedora'):
         p = s.split('-')
         if len(p) != 3:
             raise Error("Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s)
@@ -808,25 +819,13 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args.target, args.direct, args.debug, args.work)
-        packages, git_commit = target.package(args.project, args.checkout)
-        if hasattr(packages, 'strip') or (not hasattr(packages, '__getitem__') and not hasattr(packages, '__iter__')):
-            packages = [packages]
 
         if target.platform == 'linux':
-            out = '%s%s-%s-%d' % (args.output, target.distro, target.version, target.bits)
-            try:
-                makedirs(out)
-            except:
-                pass
-            for p in packages:
-                copyfile(p, '%s/%s' % (out, os.path.basename(devel_to_git(git_commit, p))))
+            output_dir = os.path.join(args.output, '%s-%s-%d' % (target.distro, target.version, target.bits))
         else:
-            try:
-                makedirs(args.output)
-            except:
-                pass
-            for p in packages:
-                copyfile(p, '%s%s' % (args.output, os.path.basename(devel_to_git(git_commit, p))))
+            output_dir = args.output
+
+        target.package(args.project, args.checkout, output_dir)
 
         if not args.keep:
             target.cleanup()
