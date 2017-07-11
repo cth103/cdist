@@ -479,7 +479,6 @@ class DockerTarget(LinuxTarget):
         command('docker exec -t %s /bin/bash -c "cdist -p %s -t %s -d %s package -w /cdist"' % (container, project, target, ch))
         # I can't get wildcards to work with docker cp
         debs = command_and_read('docker exec -t %s ls -1 /%s' % (container, target)).read().split('\n')
-        makedirs(output_dir)
         for d in debs:
             d = d.strip()
             if len(d) > 0:
@@ -825,6 +824,7 @@ def main():
         else:
             output_dir = args.output
 
+        makedirs(output_dir)
         target.package(args.project, args.checkout, output_dir)
 
         if not args.keep:
