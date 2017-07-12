@@ -162,7 +162,11 @@ def makedirs(d):
     d includes a colon, otherwise locally.
     """
     if d.find(':') == -1:
-        os.makedirs(d)
+        try:
+            os.makedirs(d)
+        except OSError as e:
+            if e.errno != 17:
+                raise e
     else:
         s = d.split(':')
         command('ssh %s -- mkdir -p %s' % (s[0], s[1]))
@@ -350,8 +354,12 @@ class Target(object):
         tree = globals.trees.get(project, checkout, self)
         tree.build_dependencies()
         tree.build()
-        for p in tree.call('package', tree.version):
-            copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
+        packages = tree.call('package', tree.version)
+        if isinstance(packages, (str, unicode)):
+            copyfile(packages, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, packages))))
+        else:
+            for p in packages:
+                copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
 
     def test(self, tree, test):
         """test is the test case to run, or None"""
