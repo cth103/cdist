@@ -859,18 +859,19 @@ def main():
         else:
             version.bump_micro()
 
-        set_version_in_wscript(version)
-        append_version_to_changelog(version)
-        append_version_to_debian_changelog(version)
+        with TreeDirectory(tree):
+            set_version_in_wscript(version)
+            append_version_to_changelog(version)
+            append_version_to_debian_changelog(version)
 
-        command('git commit -a -m "Bump version"')
-        command('git tag -m "v%s" v%s' % (version, version))
+            command('git commit -a -m "Bump version"')
+            command('git tag -m "v%s" v%s' % (version, version))
 
-        version.to_devel()
-        set_version_in_wscript(version)
-        command('git commit -a -m "Bump version"')
-        command('git push')
-        command('git push --tags')
+            version.to_devel()
+            set_version_in_wscript(version)
+            command('git commit -a -m "Bump version"')
+            command('git push')
+            command('git push --tags')
 
         target.cleanup()
 
