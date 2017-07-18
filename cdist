@@ -99,6 +99,7 @@ class Config:
                          Option('osx_environment_prefix'),
                          Option('osx_sdk_prefix'),
                          Option('osx_sdk'),
+                         BoolOption('docker_sudo'),
                          Option('parallel', 4) ]
 
         try:
@@ -128,6 +129,12 @@ class Config:
     def set(self, k, v):
         for o in self.options:
             o.offer(k, v)
+
+    def docker(self):
+        if self.get('docker_sudo'):
+            return 'sudo docker'
+        else:
+            return 'docker'
 
 config = Config()
 
@@ -483,15 +490,15 @@ class DockerTarget(LinuxTarget):
         if checkout is not None:
             ch = '-c %s' % checkout
         target = '%s-%s-%s' % (self.distro, self.version, self.bits)
-        container = command_and_read('docker run -itd %s /bin/bash' % target).read().strip()
-        command('docker exec -t %s /bin/bash -c "cdist -p %s -t %s -d %s package -w /cdist"' % (container, project, target, ch))
+        container = command_and_read('%s run -itd %s /bin/bash' % (config.docker(), target)).read().strip()
+        command('%s exec -t %s /bin/bash -c "cdist -p %s -t %s -d %s package -w /cdist"' % (config.docker(), container, project, target, ch))
         # I can't get wildcards to work with docker cp
-        debs = command_and_read('docker exec -t %s ls -1 /%s' % (container, target)).read().split('\n')
+        debs = command_and_read('%s exec -t %s ls -1 /%s' % (config.docker(), container, target)).read().split('\n')
         for d in debs:
             d = d.strip()
             if len(d) > 0:
-                command('docker cp %s:/%s/%s %s' % (container, target, d, output_dir))
-        command('docker kill %s' % container)
+                command('%s cp %s:/%s/%s %s' % (config.docker(), container, target, d, output_dir))
+        command('%s kill %s' % (config.docker(), container))
 
 class DirectTarget(LinuxTarget):
     """Build directly in the current environment"""
