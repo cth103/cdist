@@ -92,8 +92,7 @@ class BoolOption(object):
 
 class Config:
     def __init__(self):
-        self.options = [ Option('windows_environment_prefix'),
-                         Option('mingw_prefix'),
+        self.options = [ Option('mxe_prefix'),
                          Option('git_prefix'),
                          Option('osx_build_host'),
                          Option('osx_environment_prefix'),
@@ -368,6 +367,11 @@ class Target(object):
             for p in packages:
                 copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
 
+    def build(self, project, checkout):
+        tree = globals.trees.get(project, checkout, self)
+        tree.build_dependencies()
+        tree.build()
+
     def test(self, tree, test):
         """test is the test case to run, or None"""
         tree.build_dependencies()
@@ -412,46 +416,42 @@ class WindowsTarget(Target):
 
     version: Windows version ('xp' or None)
     bits: bitness of Windows (32 or 64)
-    environment_prefix: path to Windows environment
-    mingw_path: path to mingw binaries
+    name: name of our target e.g. x86_64-w64-mingw32.shared
+    library_prefix: path to Windows libraries
+    tool_path: path to toolchain binaries
     """
     def __init__(self, version, bits, directory=None):
         super(WindowsTarget, self).__init__('windows', directory)
         self.version = version
         self.bits = bits
 
-        self.environment_prefix = '%s/%d' % (config.get('windows_environment_prefix'), self.bits)
-        if not os.path.exists(self.environment_prefix):
-            raise Error('environment prefix %s does not exist' % self.environment_prefix)
-
+        self.tool_path = '%s/usr/bin' % config.get('mxe_prefix')
         if self.bits == 32:
-            self.mingw_name = 'i686'
+            self.name = 'i686-w64-mingw32.shared'
         else:
-            self.mingw_name = 'x86_64'
+            self.name = 'x86_64-w64-mingw32.shared'
+        self.library_prefix = '%s/usr/%s' % (config.get('mxe_prefix'), self.name)
 
-        self.mingw_path = '%s/%d/bin' % (config.get('mingw_prefix'), self.bits)
-        self.mingw_prefixes = ['/%s/%d' % (config.get('mingw_prefix'), self.bits), '%s/%d/%s-w64-mingw32' % (config.get('mingw_prefix'), bits, self.mingw_name)]
-
-        self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.environment_prefix)
+        self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.library_prefix)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory))
-        self.set('PATH', '%s/bin:%s:%s' % (self.environment_prefix, self.mingw_path, os.environ['PATH']))
-        self.set('CC', '%s-w64-mingw32-gcc' % self.mingw_name)
-        self.set('CXX', '%s-w64-mingw32-g++' % self.mingw_name)
-        self.set('LD', '%s-w64-mingw32-ld' % self.mingw_name)
-        self.set('RANLIB', '%s-w64-mingw32-ranlib' % self.mingw_name)
-        self.set('WINRC', '%s-w64-mingw32-windres' % self.mingw_name)
-        cxx = '-I%s/include -I%s/include' % (self.environment_prefix, self.directory)
-        link = '-L%s/lib -L%s/lib' % (self.environment_prefix, self.directory)
-        for p in self.mingw_prefixes:
-            cxx += ' -I%s/include' % p
-            link += ' -L%s/lib' % p
+        self.set('PATH', '%s/bin:%s:%s' % (self.library_prefix, self.tool_path, os.environ['PATH']))
+        print(self.get('PATH'))
+        self.set('CC', '%s-gcc' % self.name)
+        self.set('CXX', '%s-g++' % self.name)
+        self.set('LD', '%s-ld' % self.name)
+        self.set('RANLIB', '%s-ranlib' % self.name)
+        self.set('WINRC', '%s-windres' % self.name)
+        cxx = '-I%s/include -I%s/include' % (self.library_prefix, self.directory)
+        link = '-L%s/lib -L%s/lib' % (self.library_prefix, self.directory)
         self.set('CXXFLAGS', '"%s"' % cxx)
         self.set('CPPFLAGS', '')
         self.set('LINKFLAGS', '"%s"' % link)
         self.set('LDFLAGS', '"%s"' % link)
 
-        # This is for backwards-compatibility
-        self.windows_prefix = self.environment_prefix
+        # These are for backwards-compatibility
+        self.windows_prefix = self.library_prefix
+        self.mingw_prefixes = [self.library_prefix]
+        self.mingw_path = self.tool_path
 
     def command(self, c):
         log('host -> %s' % c)
@@ -484,6 +484,15 @@ class DockerTarget(LinuxTarget):
     """Build in a docker container"""
     def __init__(self, distro, version, bits, directory=None):
         super(DockerTarget, self).__init__(distro, version, bits, directory)
+
+    def build(self, project, checkout):
+        ch = ''
+        if checkout is not None:
+            ch = '-c %s' % checkout
+        target = '%s-%s-%s' % (self.distro, self.version, self.bits)
+        container = command_and_read('%s run -itd %s /bin/bash' % (config.docker(), target)).read().strip()
+        command('%s exec -t %s /bin/bash -c "cdist -p %s -t %s -d %s build -w /cdist"' % (config.docker(), container, project, target, ch))
+        command('%s kill %s' % (config.docker(), container))
 
     def package(self, project, checkout, output_dir):
         ch = ''
@@ -822,9 +831,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args.target, args.direct, args.debug, args.work)
-        tree = globals.trees.get(args.project, args.checkout, target)
-        tree.build_dependencies()
-        tree.build()
+        target.build(args.project, args.checkout)
         if not args.keep:
             target.cleanup()
 
