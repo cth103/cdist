@@ -452,6 +452,7 @@ class WindowsTarget(Target):
         self.windows_prefix = self.library_prefix
         self.mingw_prefixes = [self.library_prefix]
         self.mingw_path = self.tool_path
+        self.mingw_name = self.name
 
     def command(self, c):
         log('host -> %s' % c)
