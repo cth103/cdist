@@ -435,7 +435,6 @@ class WindowsTarget(Target):
         self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.library_prefix)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '%s/bin:%s:%s' % (self.library_prefix, self.tool_path, os.environ['PATH']))
-        print(self.get('PATH'))
         self.set('CC', '%s-gcc' % self.name)
         self.set('CXX', '%s-g++' % self.name)
         self.set('LD', '%s-ld' % self.name)
@@ -448,11 +447,25 @@ class WindowsTarget(Target):
         self.set('LINKFLAGS', '"%s"' % link)
         self.set('LDFLAGS', '"%s"' % link)
 
-        # These are for backwards-compatibility
-        self.windows_prefix = self.library_prefix
-        self.mingw_prefixes = [self.library_prefix]
-        self.mingw_path = self.tool_path
-        self.mingw_name = self.name
+    @property
+    def windows_prefix(self):
+        log('Deprecated property windows_prefix')
+        return self.library_prefix
+
+    @property
+    def mingw_prefixes(self):
+        log('Deprecated property mingw_prefixes')
+        return [self.library_prefix]
+
+    @property
+    def mingw_path(self):
+        log('Deprecated property mingw_path')
+        return self.tool_path
+
+    @property
+    def mingw_name(self):
+        log('Deprecated property mingw_name')
+        return self.name
 
     def command(self, c):
         log('host -> %s' % c)
