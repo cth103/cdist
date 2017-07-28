@@ -520,7 +520,8 @@ class DockerTarget(LinuxTarget):
         for d in debs:
             d = d.strip()
             if len(d) > 0:
-                command('%s cp %s:/%s/%s %s' % (config.docker(), container, target, d, output_dir))
+                command('%s cp %s:/%s/%s %s' % (config.docker(), container, target, d, self.directory))
+                copyfile('%s/%s' % (self.directory, d), output_dir)
         command('%s kill %s' % (config.docker(), container))
 
 class DirectTarget(LinuxTarget):
