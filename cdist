@@ -524,6 +524,9 @@ class DockerTarget(LinuxTarget):
                 copyfile('%s/%s' % (self.directory, d), output_dir)
         command('%s kill %s' % (config.docker(), container))
 
+    def command(self, cmd):
+        command('%s exec -t %s /bin/bash -c "%s"' % (config.docker(), container, cmd))
+
 class DirectTarget(LinuxTarget):
     """Build directly in the current environment"""
     def __init__(self, distro, version, bits, directory=None):
