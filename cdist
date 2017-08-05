@@ -524,6 +524,8 @@ class DockerTarget(LinuxTarget):
         command('%s kill %s' % (config.docker(), container))
 
     def command(self, cmd):
+        target = '%s-%s-%s' % (self.distro, self.version, self.bits)
+        container = command_and_read('%s run -itd %s /bin/bash' % (config.docker(), target)).read().strip()
         command('%s exec -t %s /bin/bash -c "%s"' % (config.docker(), container, cmd))
 
 class DirectTarget(LinuxTarget):
