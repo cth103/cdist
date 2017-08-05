@@ -94,7 +94,6 @@ class Config:
     def __init__(self):
         self.options = [ Option('mxe_prefix'),
                          Option('git_prefix'),
-                         Option('osx_build_host'),
                          Option('osx_environment_prefix'),
                          Option('osx_sdk_prefix'),
                          Option('osx_sdk'),
