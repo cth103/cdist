@@ -262,7 +262,7 @@ class TreeDirectory:
         self.tree = tree
     def __enter__(self):
         self.cwd = os.getcwd()
-        os.chdir('%s/src/%s' % (self.tree.target.directory, self.tree.name))
+        os.chdir('%s/src/%s' % (self.tree.target.master_directory, self.tree.name))
     def __exit__(self, type, value, traceback):
         os.chdir(self.cwd)
 
@@ -343,17 +343,29 @@ class Target(object):
         self.platform = platform
         self.parallel = int(config.get('parallel'))
 
-        # self.directory is the working directory
+        # self.master_dir is the working directory on the master (where cdist is running)
         if directory is None:
-            self.directory = tempfile.mkdtemp('', 'tmp', TEMPORARY_DIRECTORY)
+            self.master_dir = tempfile.mkdtemp('', 'tmp', TEMPORARY_DIRECTORY)
             self.rmdir = True
         else:
-            self.directory = directory
+            self.master_dir = directory
             self.rmdir = False
 
         # Environment variables that we will use when we call cscripts
         self.variables = {}
         self.debug = False
+
+    @property
+    def master_directory(self):
+        return self.master_dir
+
+    @property
+    def directory(self):
+        """Working directory on the slave"""
+        if hasattr(self, 'slave_dir'):
+            # This target has set up a slave_dir which may be different to master_dir
+            return self.slave_dir
+        return self.master_directory
 
     def package(self, project, checkout, output_dir):
         tree = globals.trees.get(project, checkout, self)
@@ -406,7 +418,7 @@ class Target(object):
 
     def cleanup(self):
         if self.rmdir:
-            rmtree(self.directory)
+            rmtree(self.master_directory)
 
 
 class WindowsTarget(Target):
@@ -481,6 +493,7 @@ class LinuxTarget(Target):
     """
 
     def __init__(self, distro, version, bits, directory=None):
+        self.slave_dir = '/cdist'
         super(LinuxTarget, self).__init__('linux', directory)
         self.distro = distro
         self.version = version
@@ -493,49 +506,16 @@ class LinuxTarget(Target):
                  '%s/lib/pkgconfig:%s/lib64/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
-class DockerTarget(LinuxTarget):
-    """Build in a docker container"""
-    def __init__(self, distro, version, bits, directory=None):
-        super(DockerTarget, self).__init__(distro, version, bits, directory)
-
-    def build(self, project, checkout):
-        ch = ''
-        if checkout is not None:
-            ch = '-c %s' % checkout
-        target = '%s-%s-%s' % (self.distro, self.version, self.bits)
-        container = command_and_read('%s run -itd %s /bin/bash' % (config.docker(), target)).read().strip()
-        command('%s exec -t %s /bin/bash -c "cdist -p %s -t %s -d %s build -w /cdist"' % (config.docker(), container, project, target, ch))
-        command('%s kill %s' % (config.docker(), container))
-
-    def package(self, project, checkout, output_dir):
-        ch = ''
-        if checkout is not None:
-            ch = '-c %s' % checkout
-        target = '%s-%s-%s' % (self.distro, self.version, self.bits)
-        container = command_and_read('%s run -itd %s /bin/bash' % (config.docker(), target)).read().strip()
-        command('%s exec -t %s /bin/bash -c "cdist -p %s -t %s -d %s package -w /cdist"' % (config.docker(), container, project, target, ch))
-        # I can't get wildcards to work with docker cp
-        debs = command_and_read('%s exec -t %s ls -1 /%s' % (config.docker(), container, target)).read().split('\n')
-        for d in debs:
-            d = d.strip()
-            if len(d) > 0:
-                command('%s cp %s:/%s/%s %s' % (config.docker(), container, target, d, self.directory))
-                copyfile('%s/%s' % (self.directory, d), output_dir)
-        command('%s kill %s' % (config.docker(), container))
-
+        image = '%s-%s-%s' % (self.distro, self.version, self.bits)
+        self.container = command_and_read('%s run -v %s:%s -itd %s /bin/bash' % (config.docker(), self.master_directory, self.directory, image)).read().strip()
+        
     def command(self, cmd):
-        target = '%s-%s-%s' % (self.distro, self.version, self.bits)
-        container = command_and_read('%s run -itd %s /bin/bash' % (config.docker(), target)).read().strip()
-        command('%s exec -t %s /bin/bash -c "%s"' % (config.docker(), container, cmd))
+        dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.master_directory))
+        command('%s exec -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), self.container, self.variables_string(), dir, cmd))
 
-class DirectTarget(LinuxTarget):
-    """Build directly in the current environment"""
-    def __init__(self, distro, version, bits, directory=None):
-        super(DirectTarget, self).__init__(distro, version, bits, directory)
-
-    def command(self, c):
-        command('%s %s' % (self.variables_string(), c))
-
+    def cleanup(self):
+        super(LinuxTarget, self).cleanup()
+        command('%s kill %s' % (config.docker(), container))
 
 class OSXTarget(Target):
     def __init__(self, directory=None):
@@ -602,7 +582,7 @@ class SourceTarget(Target):
         command('%s %s' % (self.variables_string(), c))
 
     def cleanup(self):
-        rmtree(self.directory)
+        rmtree(self.master_directory)
 
     def package(self, project, checkout, output_dir):
         tree = globals.trees.get(project, checkout, self)
@@ -621,7 +601,7 @@ class SourceTarget(Target):
 #    or osx-{32,64}
 #    or source
 # @param debug True to build with debugging symbols (where possible)
-def target_factory(s, direct, debug, work):
+def target_factory(s, debug, work):
     target = None
     if s.startswith('windows-'):
         x = s.split('-')
@@ -634,18 +614,15 @@ def target_factory(s, direct, debug, work):
     elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-') or s.startswith('fedora'):
         p = s.split('-')
         if len(p) != 3:
-            raise Error("Bad Linux target name `%s'; must be something like ubuntu-12.04-32 (i.e. distro-version-bits)" % s)
-        if direct:
-            target = DirectTarget(p[0], p[1], int(p[2]), work)
-        else:
-            target = DockerTarget(p[0], p[1], int(p[2]), work)
+            raise Error("Bad Linux target name `%s'; must be something like ubuntu-16.04-32 (i.e. distro-version-bits)" % s)
+        target = LinuxTarget(p[0], p[1], int(p[2]), work)
     elif s.startswith('arch-'):
         p = s.split('-')
         if len(p) != 2:
             raise Error("Bad Arch target name `%s'; must be arch-32 or arch-64")
-        target = DockerTarget(p[0], None, p[1], work)
+        target = LinuxTarget(p[0], None, p[1], work)
     elif s == 'raspbian':
-        target = DockerTarget(s, None, None, work)
+        target = LinuxTarget(s, None, None, work)
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), work)
     elif s == 'osx':
@@ -655,8 +632,6 @@ def target_factory(s, direct, debug, work):
             target = OSXUniversalTarget(work)
     elif s == 'source':
         target = SourceTarget()
-    elif s == 'docker':
-        target = DockerTarget()
 
     if target is None:
         raise Error("Bad target `%s'" % s)
@@ -696,8 +671,8 @@ class Tree(object):
         if globals.quiet:
             flags = '-q'
             redirect = '>/dev/null'
-        command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.directory, self.name))
-        os.chdir('%s/src/%s' % (target.directory, self.name))
+        command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.master_directory, self.name))
+        os.chdir('%s/src/%s' % (target.master_directory, self.name))
 
         spec = self.specifier
         if spec is None:
@@ -708,7 +683,7 @@ class Tree(object):
         command('git submodule init --quiet')
         command('git submodule update --quiet')
 
-        proj = '%s/src/%s' % (target.directory, self.name)
+        proj = '%s/src/%s' % (target.master_directory, self.name)
 
         self.cscript = {}
         exec(open('%s/cscript' % proj).read(), self.cscript)
@@ -809,7 +784,6 @@ def main():
     parser.add_argument('-o', '--output', help='output directory', default='.')
     parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
     parser.add_argument('-t', '--target', help='target')
-    parser.add_argument('-d', '--direct', help='build in the current environment', action='store_true')
     parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
     parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
     parser.add_argument('-w', '--work', help='override default work directory')
@@ -849,7 +823,7 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args.target, args.direct, args.debug, args.work)
+        target = target_factory(args.target, args.debug, args.work)
         target.build(args.project, args.checkout)
         if not args.keep:
             target.cleanup()
@@ -858,7 +832,7 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args.target, args.direct, args.debug, args.work)
+        target = target_factory(args.target, args.debug, args.work)
 
         if target.platform == 'linux':
             output_dir = os.path.join(args.output, '%s-%s-%d' % (target.distro, target.version, target.bits))
@@ -1013,7 +987,7 @@ def main():
 
         target = None
         try:
-            target = target_factory(args.target, args.direct, args.debug, args.work)
+            target = target_factory(args.target, args.debug, args.work)
             tree = globals.trees.get(args.project, args.checkout, target)
             with TreeDirectory(tree):
                 target.test(tree, args.test)
@@ -1029,7 +1003,7 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args.target, args.direct, args.debug, args.work)
+        target = target_factory(args.target, args.debug, args.work)
         target.command('bash')
 
     elif globals.command == 'revision':
