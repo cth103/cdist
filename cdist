@@ -515,7 +515,7 @@ class LinuxTarget(Target):
 
     def cleanup(self):
         super(LinuxTarget, self).cleanup()
-        command('%s kill %s' % (config.docker(), container))
+        command('%s kill %s' % (config.docker(), self.container))
 
 class OSXTarget(Target):
     def __init__(self, directory=None):
