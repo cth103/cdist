@@ -28,6 +28,7 @@ import subprocess
 import re
 import copy
 import inspect
+import getpass
 
 TEMPORARY_DIRECTORY = '/var/tmp'
 
@@ -48,14 +49,20 @@ class Trees:
     def __init__(self):
         self.trees = []
 
-    def get(self, name, specifier, target):
+    def get(self, name, specifier, target, required_by=None):
         for t in self.trees:
             if t.name == name and t.specifier == specifier and t.target == target:
                 return t
             elif t.name == name and t.specifier != specifier:
-                raise Error('conflicting versions of %s requested (%s and %s)' % (name, specifier, t.specifier))
+                a = specifier
+                if required_by is not None:
+                    a += ' by %s' % required_by
+                b = t.specifier
+                if t.required_by is not None:
+                    b += ' by %s' % t.required_by
+                raise Error('conflicting versions of %s required (%s versus %s)' % (name, a, b))
 
-        nt = Tree(name, specifier, target)
+        nt = Tree(name, specifier, target, required_by)
         self.trees.append(nt)
         return nt
 
@@ -262,7 +269,7 @@ class TreeDirectory:
         self.tree = tree
     def __enter__(self):
         self.cwd = os.getcwd()
-        os.chdir('%s/src/%s' % (self.tree.target.master_directory, self.tree.name))
+        os.chdir('%s/src/%s' % (self.tree.target.directory, self.tree.name))
     def __exit__(self, type, value, traceback):
         os.chdir(self.cwd)
 
@@ -343,29 +350,16 @@ class Target(object):
         self.platform = platform
         self.parallel = int(config.get('parallel'))
 
-        # self.master_dir is the working directory on the master (where cdist is running)
         if directory is None:
-            self.master_dir = tempfile.mkdtemp('', 'tmp', TEMPORARY_DIRECTORY)
+            self.directory = tempfile.mkdtemp('', 'tmp', TEMPORARY_DIRECTORY)
             self.rmdir = True
         else:
-            self.master_dir = directory
+            self.directory = directory
             self.rmdir = False
 
         # Environment variables that we will use when we call cscripts
         self.variables = {}
         self.debug = False
-
-    @property
-    def master_directory(self):
-        return self.master_dir
-
-    @property
-    def directory(self):
-        """Working directory on the slave"""
-        if hasattr(self, 'slave_dir'):
-            # This target has set up a slave_dir which may be different to master_dir
-            return self.slave_dir
-        return self.master_directory
 
     def package(self, project, checkout, output_dir):
         tree = globals.trees.get(project, checkout, self)
@@ -418,7 +412,7 @@ class Target(object):
 
     def cleanup(self):
         if self.rmdir:
-            rmtree(self.master_directory)
+            rmtree(self.directory)
 
 
 class WindowsTarget(Target):
@@ -493,7 +487,6 @@ class LinuxTarget(Target):
     """
 
     def __init__(self, distro, version, bits, directory=None):
-        self.slave_dir = '/cdist'
         super(LinuxTarget, self).__init__('linux', directory)
         self.distro = distro
         self.version = version
@@ -507,11 +500,11 @@ class LinuxTarget(Target):
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
         image = '%s-%s-%s' % (self.distro, self.version, self.bits)
-        self.container = command_and_read('%s run -v %s:%s -itd %s /bin/bash' % (config.docker(), self.master_directory, self.directory, image)).read().strip()
-        
+        self.container = command_and_read('%s run -u %s -v %s:%s -itd %s /bin/bash' % (config.docker(), getpass.getuser(), self.directory, self.directory, image)).read().strip()
+
     def command(self, cmd):
-        dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.master_directory))
-        command('%s exec -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), self.container, self.variables_string(), dir, cmd))
+        dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.directory))
+        command('%s exec -u %s -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), getpass.getuser(), self.container, self.variables_string(), dir, cmd))
 
     def cleanup(self):
         super(LinuxTarget, self).cleanup()
@@ -582,7 +575,7 @@ class SourceTarget(Target):
         command('%s %s' % (self.variables_string(), c))
 
     def cleanup(self):
-        rmtree(self.master_directory)
+        rmtree(self.directory)
 
     def package(self, project, checkout, output_dir):
         tree = globals.trees.get(project, checkout, self)
@@ -650,19 +643,21 @@ class Tree(object):
        Attributes:
            name -- name of git repository (without the .git)
            specifier -- git tag or revision to use
-           target --- target object that we are using
-           version --- version from the wscript (if one is present)
+           target -- target object that we are using
+           version -- version from the wscript (if one is present)
            git_commit -- git revision that is actually being used
-           built --- true if the tree has been built yet in this run
+           built -- true if the tree has been built yet in this run
+           required_by -- name of the tree that requires this one
     """
 
-    def __init__(self, name, specifier, target):
+    def __init__(self, name, specifier, target, required_by):
         self.name = name
         self.specifier = specifier
         self.target = target
         self.version = None
         self.git_commit = None
         self.built = False
+        self.required_by = required_by
 
         cwd = os.getcwd()
 
@@ -671,8 +666,8 @@ class Tree(object):
         if globals.quiet:
             flags = '-q'
             redirect = '>/dev/null'
-        command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.master_directory, self.name))
-        os.chdir('%s/src/%s' % (target.master_directory, self.name))
+        command('git clone %s %s/%s.git %s/src/%s' % (flags, config.get('git_prefix'), self.name, target.directory, self.name))
+        os.chdir('%s/src/%s' % (target.directory, self.name))
 
         spec = self.specifier
         if spec is None:
@@ -683,7 +678,7 @@ class Tree(object):
         command('git submodule init --quiet')
         command('git submodule update --quiet')
 
-        proj = '%s/src/%s' % (target.master_directory, self.name)
+        proj = '%s/src/%s' % (target.directory, self.name)
 
         self.cscript = {}
         exec(open('%s/cscript' % proj).read(), self.cscript)
@@ -711,7 +706,7 @@ class Tree(object):
             deps = self.call('dependencies')
 
         for d in deps:
-            dep = globals.trees.get(d[0], d[1], self.target)
+            dep = globals.trees.get(d[0], d[1], self.target, self.name)
 
             options = dict()
             # Make the options to pass in from the option_defaults of the thing
@@ -992,11 +987,11 @@ def main():
             with TreeDirectory(tree):
                 target.test(tree, args.test)
         except Error as e:
-            if target is not None:
+            if target is not None and not args.keep:
                 target.cleanup()
             raise
 
-        if target is not None:
+        if target is not None and not args.keep:
             target.cleanup()
 
     elif globals.command == 'shell':
