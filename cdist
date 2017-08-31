@@ -392,15 +392,21 @@ class Target(object):
     def get(self, a):
         return self.variables[a]
 
-    def append_with_space(self, k, v):
+    def append(self, k, v, s):
         if (not k in self.variables) or len(self.variables[k]) == 0:
             self.variables[k] = '"%s"' % v
         else:
             e = self.variables[k]
             if e[0] == '"' and e[-1] == '"':
-                self.variables[k] = '"%s %s"' % (e[1:-1], v)
+                self.variables[k] = '"%s%s%s"' % (e[1:-1], s, v)
             else:
-                self.variables[k] = '"%s %s"' % (e, v)
+                self.variables[k] = '"%s%s%s"' % (e, s, v)
+
+    def append_with_space(self, k, v):
+        return self.append(k, v, ' ')
+
+    def append_with_colon(self, k, v):
+        return self.append(k, v, ':')
 
     def variables_string(self, escaped_quotes=False):
         e = ''
@@ -510,6 +516,11 @@ class LinuxTarget(Target):
         super(LinuxTarget, self).cleanup()
         command('%s kill %s' % (config.docker(), self.container))
 
+    def test(self, tree, test):
+        self.append_with_colon('PATH', '%s/bin' % self.directory)
+        self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
+        super(LinuxTarget, self).test(tree, test)
+
 class OSXTarget(Target):
     def __init__(self, directory=None):
         super(OSXTarget, self).__init__('osx', directory)
@@ -591,6 +602,7 @@ class SourceTarget(Target):
 #    or debian-version-{32,64}
 #    or centos-version-{32,64}
 #    or fedora-version-{32,64}
+#    or mageia-version-{32,64}
 #    or osx-{32,64}
 #    or source
 # @param debug True to build with debugging symbols (where possible)
@@ -604,7 +616,7 @@ def target_factory(s, debug, work):
             target = WindowsTarget(x[1], int(x[2]), work)
         else:
             raise Error("Bad Windows target name `%s'")
-    elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-') or s.startswith('fedora'):
+    elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-') or s.startswith('fedora-') or s.startswith('mageia-'):
         p = s.split('-')
         if len(p) != 3:
             raise Error("Bad Linux target name `%s'; must be something like ubuntu-16.04-32 (i.e. distro-version-bits)" % s)
@@ -702,7 +714,7 @@ class Tree(object):
         if len(inspect.getargspec(self.cscript['dependencies']).args) == 2:
             deps = self.call('dependencies', options)
         else:
-            log("Deprecated cscipt dependencies() method with no parameter")
+            log("Deprecated cscipt dependencies() method with no options parameter")
             deps = self.call('dependencies')
 
         for d in deps:
