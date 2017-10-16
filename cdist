@@ -361,6 +361,9 @@ class Target(object):
         self.variables = {}
         self.debug = False
 
+    def setup(self):
+        pass
+
     def package(self, project, checkout, output_dir):
         tree = globals.trees.get(project, checkout, self)
         tree.build_dependencies()
@@ -419,6 +422,9 @@ class Target(object):
     def cleanup(self):
         if self.rmdir:
             rmtree(self.directory)
+
+    def mount(self, m):
+        pass
 
 
 class WindowsTarget(Target):
@@ -497,6 +503,7 @@ class LinuxTarget(Target):
         self.distro = distro
         self.version = version
         self.bits = bits
+        self.mounts = []
 
         self.set('CXXFLAGS', '-I%s/include' % self.directory)
         self.set('CPPFLAGS', '')
@@ -505,8 +512,12 @@ class LinuxTarget(Target):
                  '%s/lib/pkgconfig:%s/lib64/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
+    def setup(self):
         image = '%s-%s-%s' % (self.distro, self.version, self.bits)
-        self.container = command_and_read('%s run -u %s -v %s:%s -itd %s /bin/bash' % (config.docker(), getpass.getuser(), self.directory, self.directory, image)).read().strip()
+        mounts = '-v %s:%s ' % (self.directory, self.directory)
+        for m in self.mounts:
+            mounts += '-v %s:%s ' % (m, m)
+        self.container = command_and_read('%s run -u %s %s -itd %s /bin/bash' % (config.docker(), getpass.getuser(), mounts, image)).read().strip()
 
     def command(self, cmd):
         dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.directory))
@@ -520,6 +531,9 @@ class LinuxTarget(Target):
         self.append_with_colon('PATH', '%s/bin' % self.directory)
         self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
         super(LinuxTarget, self).test(tree, test)
+
+    def mount(self, m):
+        self.mounts.append(m)
 
 class OSXTarget(Target):
     def __init__(self, directory=None):
@@ -606,42 +620,53 @@ class SourceTarget(Target):
 #    or osx-{32,64}
 #    or source
 # @param debug True to build with debugging symbols (where possible)
-def target_factory(s, debug, work):
+def target_factory(args):
+    s = args.target
     target = None
     if s.startswith('windows-'):
         x = s.split('-')
         if len(x) == 2:
-            target = WindowsTarget(None, int(x[1]), work)
+            target = WindowsTarget(None, int(x[1]), args.work)
         elif len(x) == 3:
-            target = WindowsTarget(x[1], int(x[2]), work)
+            target = WindowsTarget(x[1], int(x[2]), args.work)
         else:
             raise Error("Bad Windows target name `%s'")
     elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-') or s.startswith('fedora-') or s.startswith('mageia-'):
         p = s.split('-')
         if len(p) != 3:
             raise Error("Bad Linux target name `%s'; must be something like ubuntu-16.04-32 (i.e. distro-version-bits)" % s)
-        target = LinuxTarget(p[0], p[1], int(p[2]), work)
+        target = LinuxTarget(p[0], p[1], int(p[2]), args.work)
     elif s.startswith('arch-'):
         p = s.split('-')
         if len(p) != 2:
             raise Error("Bad Arch target name `%s'; must be arch-32 or arch-64")
-        target = LinuxTarget(p[0], None, p[1], work)
+        target = LinuxTarget(p[0], None, p[1], args.work)
     elif s == 'raspbian':
-        target = LinuxTarget(s, None, None, work)
+        target = LinuxTarget(s, None, None, args.work)
     elif s.startswith('osx-'):
-        target = OSXSingleTarget(int(s.split('-')[1]), work)
+        target = OSXSingleTarget(int(s.split('-')[1]), args.work)
     elif s == 'osx':
         if globals.command == 'build':
-            target = OSXSingleTarget(64, work)
+            target = OSXSingleTarget(64, args.work)
         else:
-            target = OSXUniversalTarget(work)
+            target = OSXUniversalTarget(args.work)
     elif s == 'source':
         target = SourceTarget()
 
     if target is None:
         raise Error("Bad target `%s'" % s)
 
-    target.debug = debug
+    target.debug = args.debug
+
+    if args.environment is not None:
+        for e in args.environment:
+            target.set(e, os.environ[e])
+
+    if args.mount is not None:
+        for m in args.mount:
+            target.mount(m)
+
+    target.setup()
     return target
 
 
@@ -795,8 +820,10 @@ def main():
     parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
     parser.add_argument('-w', '--work', help='override default work directory')
     parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
-    parser.add_argument('--test', help='name of test to run (with `test''), defaults to all')
+    parser.add_argument('--test', help="name of test to run (with `test'), defaults to all")
     parser.add_argument('-n', '--dry-run', help='run the process without building anything', action='store_true')
+    parser.add_argument('-e', '--environment', help='pass the value of the named environment variable into the build', action='append')
+    parser.add_argument('-m', '--mount', help='mount a given directory in the build environment', action='append')
     args = parser.parse_args()
 
     # Override configured stuff
@@ -830,7 +857,7 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args.target, args.debug, args.work)
+        target = target_factory(args)
         target.build(args.project, args.checkout)
         if not args.keep:
             target.cleanup()
@@ -839,7 +866,7 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args.target, args.debug, args.work)
+        target = target_factory(args)
 
         if target.platform == 'linux':
             output_dir = os.path.join(args.output, '%s-%s-%d' % (target.distro, target.version, target.bits))
@@ -994,7 +1021,7 @@ def main():
 
         target = None
         try:
-            target = target_factory(args.target, args.debug, args.work)
+            target = target_factory(args)
             tree = globals.trees.get(args.project, args.checkout, target)
             with TreeDirectory(tree):
                 target.test(tree, args.test)
@@ -1010,7 +1037,7 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args.target, args.debug, args.work)
+        target = target_factory(args)
         target.command('bash')
 
     elif globals.command == 'revision':
