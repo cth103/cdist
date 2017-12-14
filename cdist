@@ -161,18 +161,28 @@ def scp_escape(n):
         return '\"%s\"' % s[0]
 
 def copytree(a, b):
-    log('copy %s -> %s' % (scp_escape(b), scp_escape(b)))
-    command('scp -r %s %s' % (scp_escape(a), scp_escape(b)))
+    log('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
+    if b.startswith('s3://'):
+        command('s3cmd -P -r put "%s" "%s"' % (a, b))
+    else:
+        command('scp -r %s %s' % (scp_escape(a), scp_escape(b)))
 
 def copyfile(a, b):
     log('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
-    command('scp %s %s' % (scp_escape(a), scp_escape(b)))
+    if b.startswith('s3://'):
+        command('s3cmd -P put "%s" "%s"' % (a, b))
+    else:
+        command('scp %s %s' % (scp_escape(a), scp_escape(b)))
 
 def makedirs(d):
     """
     Make directories either locally or on a remote host; remotely if
     d includes a colon, otherwise locally.
     """
+    if d.startswith('s3://'):
+        # No need to create folders on S3
+        return
+
     if d.find(':') == -1:
         try:
             os.makedirs(d)
