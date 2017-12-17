@@ -523,7 +523,10 @@ class LinuxTarget(Target):
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
     def setup(self):
-        image = '%s-%s-%s' % (self.distro, self.version, self.bits)
+        if self.version is None:
+            image = '%s-%s' % (self.distro, self.bits)
+        else:
+            image = '%s-%s-%s' % (self.distro, self.version, self.bits)
         mounts = '-v %s:%s ' % (self.directory, self.directory)
         for m in self.mounts:
             mounts += '-v %s:%s ' % (m, m)
