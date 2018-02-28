@@ -437,7 +437,31 @@ class Target(object):
         pass
 
 
-class WindowsTarget(Target):
+class DockerTarget(Target):
+    def __init__(self, platform, directory, version):
+        super(DockerTarget, self).__init__(platform, directory)
+        self.version = version
+        self.mounts = []
+
+    def setup(self):
+        mounts = '-v %s:%s ' % (self.directory, self.directory)
+        for m in self.mounts:
+            mounts += '-v %s:%s ' % (m, m)
+        self.container = command_and_read('%s run -u %s %s -itd %s /bin/bash' % (config.docker(), getpass.getuser(), mounts, self.image)).read().strip()
+
+    def command(self, cmd):
+        dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.directory))
+        command('%s exec -u %s -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), getpass.getuser(), self.container, self.variables_string(), dir, cmd))
+
+    def cleanup(self):
+        super(DockerTarget, self).cleanup()
+        command('%s kill %s' % (config.docker(), self.container))
+        
+    def mount(self, m):
+        self.mounts.append(m)
+
+        
+class WindowsTarget(DockerTarget):
     """
     This target exposes the following additional API:
 
@@ -448,8 +472,7 @@ class WindowsTarget(Target):
     tool_path: path to toolchain binaries
     """
     def __init__(self, version, bits, directory=None):
-        super(WindowsTarget, self).__init__('windows', directory)
-        self.version = version
+        super(WindowsTarget, self).__init__('windows', directory, version)
         self.bits = bits
 
         self.tool_path = '%s/usr/bin' % config.get('mxe_prefix')
@@ -474,6 +497,8 @@ class WindowsTarget(Target):
         self.set('LINKFLAGS', '"%s"' % link)
         self.set('LDFLAGS', '"%s"' % link)
 
+        self.image = 'windows'
+
     @property
     def windows_prefix(self):
         log('Deprecated property windows_prefix')
@@ -494,11 +519,8 @@ class WindowsTarget(Target):
         log('Deprecated property mingw_name')
         return self.name
 
-    def command(self, c):
-        log('host -> %s' % c)
-        command('%s %s' % (self.variables_string(), c))
-
-class LinuxTarget(Target):
+        
+class LinuxTarget(DockerTarget):
     """
     Build for Linux in a docker container.
     This target exposes the following additional API:
@@ -509,11 +531,9 @@ class LinuxTarget(Target):
     """
 
     def __init__(self, distro, version, bits, directory=None):
-        super(LinuxTarget, self).__init__('linux', directory)
+        super(LinuxTarget, self).__init__('linux', directory, version)
         self.distro = distro
-        self.version = version
         self.bits = bits
-        self.mounts = []
 
         self.set('CXXFLAGS', '-I%s/include' % self.directory)
         self.set('CPPFLAGS', '')
@@ -522,31 +542,16 @@ class LinuxTarget(Target):
                  '%s/lib/pkgconfig:%s/lib64/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
-    def setup(self):
         if self.version is None:
-            image = '%s-%s' % (self.distro, self.bits)
+            self.image = '%s-%s' % (self.distro, self.bits)
         else:
-            image = '%s-%s-%s' % (self.distro, self.version, self.bits)
-        mounts = '-v %s:%s ' % (self.directory, self.directory)
-        for m in self.mounts:
-            mounts += '-v %s:%s ' % (m, m)
-        self.container = command_and_read('%s run -u %s %s -itd %s /bin/bash' % (config.docker(), getpass.getuser(), mounts, image)).read().strip()
-
-    def command(self, cmd):
-        dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.directory))
-        command('%s exec -u %s -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), getpass.getuser(), self.container, self.variables_string(), dir, cmd))
-
-    def cleanup(self):
-        super(LinuxTarget, self).cleanup()
-        command('%s kill %s' % (config.docker(), self.container))
+            self.image = '%s-%s-%s' % (self.distro, self.version, self.bits)
 
     def test(self, tree, test):
         self.append_with_colon('PATH', '%s/bin' % self.directory)
         self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
         super(LinuxTarget, self).test(tree, test)
 
-    def mount(self, m):
-        self.mounts.append(m)
 
 class OSXTarget(Target):
     def __init__(self, directory=None):
@@ -653,7 +658,7 @@ def target_factory(args):
         p = s.split('-')
         if len(p) != 2:
             raise Error("Bad Arch target name `%s'; must be arch-32 or arch-64")
-        target = LinuxTarget(p[0], None, p[1], args.work)
+        target = LinuxTarget(p[0], None, int(p[1]), args.work)
     elif s == 'raspbian':
         target = LinuxTarget(s, None, None, args.work)
     elif s.startswith('osx-'):
@@ -882,7 +887,10 @@ def main():
         target = target_factory(args)
 
         if target.platform == 'linux':
-            output_dir = os.path.join(args.output, '%s-%s-%d' % (target.distro, target.version, target.bits))
+            if target.distro != 'arch':
+                output_dir = os.path.join(args.output, '%s-%s-%d' % (target.distro, target.version, target.bits))
+            else:
+                output_dir = os.path.join(args.output, '%s-%d' % (target.distro, target.bits))
         else:
             output_dir = args.output
 
