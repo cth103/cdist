@@ -29,6 +29,7 @@ import re
 import copy
 import inspect
 import getpass
+import shlex
 
 TEMPORARY_DIRECTORY = '/var/tmp'
 
@@ -456,11 +457,11 @@ class DockerTarget(Target):
     def cleanup(self):
         super(DockerTarget, self).cleanup()
         command('%s kill %s' % (config.docker(), self.container))
-        
+
     def mount(self, m):
         self.mounts.append(m)
 
-        
+
 class WindowsTarget(DockerTarget):
     """
     This target exposes the following additional API:
@@ -519,7 +520,7 @@ class WindowsTarget(DockerTarget):
         log('Deprecated property mingw_name')
         return self.name
 
-        
+
 class LinuxTarget(DockerTarget):
     """
     Build for Linux in a docker container.
@@ -741,7 +742,10 @@ class Tree(object):
         if os.path.exists('%s/wscript' % proj):
             v = read_wscript_variable(proj, "VERSION");
             if v is not None:
-                self.version = Version(v)
+                try:
+                    self.version = Version(v)
+                except:
+                    self.version = Version(subprocess.Popen(shlex.split('git -C %s describe --abbrev=0' % proj), stdout=subprocess.PIPE).communicate()[0][1:])
 
         os.chdir(cwd)
 
@@ -842,6 +846,7 @@ def main():
     parser.add_argument('-n', '--dry-run', help='run the process without building anything', action='store_true')
     parser.add_argument('-e', '--environment', help='pass the value of the named environment variable into the build', action='append')
     parser.add_argument('-m', '--mount', help='mount a given directory in the build environment', action='append')
+    parser.add_argument('--no-version-commit', help="use just tags for versioning, don't modify wscript, ChangeLog etc.", action='store_true')
     args = parser.parse_args()
 
     # Override configured stuff
@@ -915,18 +920,21 @@ def main():
             version.bump_micro()
 
         with TreeDirectory(tree):
-            set_version_in_wscript(version)
-            append_version_to_changelog(version)
-            append_version_to_debian_changelog(version)
+            if not args.no_version_commit:
+                set_version_in_wscript(version)
+                append_version_to_changelog(version)
+                append_version_to_debian_changelog(version)
+                command('git commit -a -m "Bump version"')
 
-            command('git commit -a -m "Bump version"')
             command('git tag -m "v%s" v%s' % (version, version))
 
-            version.to_devel()
-            set_version_in_wscript(version)
-            command('git commit -a -m "Bump version"')
-            command('git push')
-            command('git push --tags')
+            if not args.no_version_commit:
+                version.to_devel()
+                set_version_in_wscript(version)
+                command('git commit -a -m "Bump version"')
+                command('git push')
+
+            # command('git push --tags')
 
         target.cleanup()
 
