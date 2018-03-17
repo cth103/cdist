@@ -934,7 +934,7 @@ def main():
                 command('git commit -a -m "Bump version"')
                 command('git push')
 
-            # command('git push --tags')
+            command('git push --tags')
 
         target.cleanup()
 
