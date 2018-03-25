@@ -745,7 +745,7 @@ class Tree(object):
                 try:
                     self.version = Version(v)
                 except:
-                    self.version = Version(subprocess.Popen(shlex.split('git -C %s describe --abbrev=0' % proj), stdout=subprocess.PIPE).communicate()[0][1:])
+                    self.version = Version(subprocess.Popen(shlex.split('git -C %s describe --tags --abbrev=0' % proj), stdout=subprocess.PIPE).communicate()[0][1:])
 
         os.chdir(cwd)
 
