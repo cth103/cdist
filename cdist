@@ -173,7 +173,15 @@ def copyfile(a, b):
     if b.startswith('s3://'):
         command('s3cmd -P put "%s" "%s"' % (a, b))
     else:
-        command('scp %s %s' % (scp_escape(a), scp_escape(b)))
+        bc = b.find(":")
+        if bc != -1:
+            host = b[:bc]
+            path = b[bc+1:]
+            temp_path = os.path.join(os.path.dirname(path), ".tmp." + os.path.basename(path))
+            command('scp %s %s:%s' % (scp_escape(a), host, scp_escape(temp_path)))
+            command('ssh %s -- mv %s %s' % (host, scp_escape(temp_path), scp_escape(path)))
+        else:
+            command('scp %s %s' % (scp_escape(a), scp_escape(b)))
 
 def makedirs(d):
     """
