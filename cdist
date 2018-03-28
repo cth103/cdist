@@ -178,7 +178,7 @@ def copyfile(a, b):
             host = b[:bc]
             path = b[bc+1:]
             temp_path = os.path.join(os.path.dirname(path), ".tmp." + os.path.basename(path))
-            command('scp %s %s' % (scp_escape(a), scp_escape('%s:%s' % (host, temp_path)))
+            command('scp %s %s' % (scp_escape(a), scp_escape('%s:%s' % (host, temp_path))))
             command('ssh %s -- mv %s %s' % (host, scp_escape(temp_path), scp_escape(path)))
         else:
             command('scp %s %s' % (scp_escape(a), scp_escape(b)))
