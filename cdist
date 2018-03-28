@@ -161,6 +161,9 @@ def scp_escape(n):
     else:
         return '\"%s\"' % s[0]
 
+def mv_escape(n):
+    return '\"%s\"' % n.substr(' ', '\\ ')
+
 def copytree(a, b):
     log('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
     if b.startswith('s3://'):
@@ -179,7 +182,7 @@ def copyfile(a, b):
             path = b[bc+1:]
             temp_path = os.path.join(os.path.dirname(path), ".tmp." + os.path.basename(path))
             command('scp %s %s' % (scp_escape(a), scp_escape('%s:%s' % (host, temp_path))))
-            command('ssh %s -- mv %s %s' % (host, scp_escape(temp_path), scp_escape(path)))
+            command('ssh %s -- mv %s %s' % (host, mv_escape(temp_path), mv_escape(path)))
         else:
             command('scp %s %s' % (scp_escape(a), scp_escape(b)))
 
