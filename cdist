@@ -152,6 +152,9 @@ def log(m):
     if not globals.quiet:
         print('\x1b[33m* %s\x1b[0m' % m)
 
+def escape_spaces(s):
+    return s.replace(' ', '\\ ')
+
 def scp_escape(n):
     """Escape a host:filename string for use with an scp command"""
     s = n.split(':')
@@ -178,8 +181,8 @@ def copyfile(a, b):
             host = b[:bc]
             path = b[bc+1:]
             temp_path = os.path.join(os.path.dirname(path), ".tmp." + os.path.basename(path))
-            command('scp %s %s:%s' % (scp_escape(a), host, scp_escape(temp_path)))
-            command('ssh %s -- mv %s %s' % (host, scp_escape(temp_path), scp_escape(path)))
+            command('scp %s %s' % (scp_escape(a), scp_escape(host + ":" + temp_path)))
+            command('ssh %s -- mv "%s" "%s"' % (host, escape_spaces(temp_path), escape_spaces(path)))
         else:
             command('scp %s %s' % (scp_escape(a), scp_escape(b)))
 
