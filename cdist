@@ -164,6 +164,9 @@ def scp_escape(n):
     else:
         return '\"%s\"' % s[0]
 
+def mv_escape(n):
+    return '\"%s\"' % n.substr(' ', '\\ ')
+
 def copytree(a, b):
     log('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
     if b.startswith('s3://'):
