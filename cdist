@@ -289,6 +289,22 @@ def devel_to_git(git_commit, filename):
         filename = filename.replace('devel', '-%s' % git_commit)
     return filename
 
+def argument_options(args):
+    opts = dict()
+    if args.option is not None:
+        for o in args.option:
+            b = o.split(':')
+            if len(b) != 2:
+                raise Error("Bad option `%s'" % o)
+            if b[1] == 'False':
+                opts[b[0]] = False
+            elif b[1] == 'True':
+                opts[b[0]] = True
+            else:
+                opts[b[0]] = b[1]
+    return opts
+
+
 class TreeDirectory:
     def __init__(self, tree):
         self.tree = tree
@@ -389,26 +405,31 @@ class Target(object):
     def setup(self):
         pass
 
-    def package(self, project, checkout, output_dir):
+    def package(self, project, checkout, output_dir, options):
         tree = globals.trees.get(project, checkout, self)
-        tree.build_dependencies()
-        tree.build()
-        packages = tree.call('package', tree.version)
+        tree.build_dependencies(options)
+        tree.build(options)
+        if len(inspect.getargspec(tree.cscript['package']).args) == 3:
+            packages = tree.call('package', tree.version, options)
+        else:
+            log("Deprecated cscript package() method with no options parameter")
+            packages = tree.call('package', tree.version)
+
         if isinstance(packages, (str, unicode)):
             copyfile(packages, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, packages))))
         else:
             for p in packages:
                 copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
 
-    def build(self, project, checkout):
+    def build(self, project, checkout, options):
         tree = globals.trees.get(project, checkout, self)
-        tree.build_dependencies()
-        tree.build()
+        tree.build_dependencies(options)
+        tree.build(options)
 
-    def test(self, tree, test):
+    def test(self, tree, test, options):
         """test is the test case to run, or None"""
-        tree.build_dependencies()
-        tree.build()
+        tree.build_dependencies(options)
+        tree.build(options)
         return tree.call('test', test)
 
     def set(self, a, b):
@@ -450,6 +471,7 @@ class Target(object):
 
     def mount(self, m):
         pass
+
 
 
 class DockerTarget(Target):
@@ -562,10 +584,10 @@ class LinuxTarget(DockerTarget):
         else:
             self.image = '%s-%s-%s' % (self.distro, self.version, self.bits)
 
-    def test(self, tree, test):
+    def test(self, tree, test, options):
         self.append_with_colon('PATH', '%s/bin' % self.directory)
         self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
-        super(LinuxTarget, self).test(tree, test)
+        super(LinuxTarget, self).test(tree, test, options)
 
 
 class OSXTarget(Target):
@@ -602,7 +624,7 @@ class OSXSingleTarget(OSXTarget):
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
         self.set('MACOSX_DEPLOYMENT_TARGET', config.get('osx_sdk'))
 
-    def package(self, project, checkout, output_dir):
+    def package(self, project, checkout, output_dir, options):
         raise Error('cannot package non-universal OS X versions')
 
 
@@ -610,13 +632,13 @@ class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
 
-    def package(self, project, checkout, output_dir):
+    def package(self, project, checkout, output_dir, options):
 
         for b in [32, 64]:
             target = OSXSingleTarget(b, os.path.join(self.directory, '%d' % b))
             tree = globals.trees.get(project, checkout, target)
-            tree.build_dependencies()
-            tree.build()
+            tree.build_dependencies(options)
+            tree.build(options)
 
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
@@ -635,7 +657,7 @@ class SourceTarget(Target):
     def cleanup(self):
         rmtree(self.directory)
 
-    def package(self, project, checkout, output_dir):
+    def package(self, project, checkout, output_dir, options):
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
             name = read_wscript_variable(os.getcwd(), 'APPNAME')
@@ -775,7 +797,7 @@ class Tree(object):
         if len(inspect.getargspec(self.cscript['dependencies']).args) == 2:
             deps = self.call('dependencies', options)
         else:
-            log("Deprecated cscipt dependencies() method with no options parameter")
+            log("Deprecated cscript dependencies() method with no options parameter")
             deps = self.call('dependencies')
 
         for d in deps:
@@ -862,6 +884,7 @@ def main():
     parser.add_argument('-e', '--environment', help='pass the value of the named environment variable into the build', action='append')
     parser.add_argument('-m', '--mount', help='mount a given directory in the build environment', action='append')
     parser.add_argument('--no-version-commit', help="use just tags for versioning, don't modify wscript, ChangeLog etc.", action='store_true')
+    parser.add_argument('--option', help='set an option for the build (use --option key:value)', action='append')
     args = parser.parse_args()
 
     # Override configured stuff
@@ -896,7 +919,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args)
-        target.build(args.project, args.checkout)
+        target.build(args.project, args.checkout, argument_options(args))
         if not args.keep:
             target.cleanup()
 
@@ -915,7 +938,7 @@ def main():
             output_dir = args.output
 
         makedirs(output_dir)
-        target.package(args.project, args.checkout, output_dir)
+        target.package(args.project, args.checkout, output_dir, argument_options(args))
 
         if not args.keep:
             target.cleanup()
@@ -1068,7 +1091,7 @@ def main():
             target = target_factory(args)
             tree = globals.trees.get(args.project, args.checkout, target)
             with TreeDirectory(tree):
-                target.test(tree, args.test)
+                target.test(tree, args.test, argument_options(args))
         except Error as e:
             if target is not None and not args.keep:
                 target.cleanup()
