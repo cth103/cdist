@@ -789,8 +789,14 @@ class Tree(object):
         with TreeDirectory(self):
             return self.cscript[function](self.target, *args)
 
-    def build_dependencies(self, options=None):
+    def add_defaults(self, options):
+        """Add the defaults from this into a dict options"""
+        if 'option_defaults' in self.cscript:
+            for k, v in self.cscript['option_defaults']().items():
+                if not k in options:
+                    options[k] = v
 
+    def build_dependencies(self, options):
         if not 'dependencies' in self.cscript:
             return
 
@@ -803,30 +809,34 @@ class Tree(object):
         for d in deps:
             dep = globals.trees.get(d[0], d[1], self.target, self.name)
 
-            options = dict()
-            # Make the options to pass in from the option_defaults of the thing
-            # we are building and any options specified by the parent.
-            if 'option_defaults' in dep.cscript:
-                for k, v in dep.cscript['option_defaults']().items():
-                    options[k] = v
-
+            # Start with the options passed in
+            dep_options = copy.copy(options)
+            # Add things specified by the parent
             if len(d) > 2:
                 for k, v in d[2].items():
-                    options[k] = v
+                    if not k in dep_options:
+                        dep_options[k] = v
+            # Then fill in the dependency's defaults
+            dep.add_defaults(dep_options)
 
             msg = 'Building dependency %s %s of %s' % (d[0], d[1], self.name)
-            if len(options) > 0:
-                msg += ' with options %s' % options
+            if len(dep_options) > 0:
+                msg += ' with options %s' % dep_options
             log(msg)
 
-            dep.build_dependencies(options)
-            dep.build(options)
+            dep.build_dependencies(dep_options)
+            dep.build(dep_options)
 
-    def build(self, options=None):
+    def build(self, options):
         if self.built:
             return
 
         variables = copy.copy(self.target.variables)
+
+        # Start with the options passed in
+        options = copy.copy(options)
+        # Fill in the defaults
+        self.add_defaults(options)
 
         if not globals.dry_run:
             if len(inspect.getargspec(self.cscript['build']).args) == 2:
