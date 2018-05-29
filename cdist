@@ -642,7 +642,12 @@ class OSXUniversalTarget(OSXTarget):
 
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
-            for p in tree.call('package', tree.version):
+            if len(inspect.getargspec(tree.cscript['package']).args) == 3:
+                packages = tree.call('package', tree.version, options)
+            else:
+                log("Deprecated cscript package() method with no options parameter")
+                packages = tree.call('package', tree.version)
+            for p in packages:
                 copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
 
 class SourceTarget(Target):
