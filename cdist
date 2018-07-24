@@ -953,7 +953,14 @@ def main():
             output_dir = args.output
 
         makedirs(output_dir)
-        target.package(args.project, args.checkout, output_dir, argument_options(args))
+
+        # Start with the options passed on the command line
+        options = copy.copy(argument_options(args))
+        # Fill in the defaults
+        tree = globals.trees.get(args.project, args.checkout, target)
+        tree.add_defaults(options)
+
+        target.package(args.project, args.checkout, output_dir, options)
 
         if not args.keep:
             target.cleanup()
