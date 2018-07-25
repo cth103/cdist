@@ -106,6 +106,7 @@ class Config:
                          Option('osx_sdk_prefix'),
                          Option('osx_sdk'),
                          BoolOption('docker_sudo'),
+                         Option('flatpak_state_dir'),
                          Option('parallel', 4) ]
 
         try:
@@ -520,6 +521,12 @@ class FlatpakTarget(Target):
     def checkout_dependencies(self):
         tree = globals.trees.get(self.project, self.checkout, self)
         return tree.checkout_dependencies()
+
+    def flatpak(self):
+        return 'flatpak'
+
+    def flatpak_builder(self):
+        return 'flatpak-builder --state-dir=%s' % config.get('flatpak_state_dir')
 
 
 class WindowsTarget(DockerTarget):
