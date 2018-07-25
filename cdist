@@ -401,13 +401,17 @@ class Target(object):
         # Environment variables that we will use when we call cscripts
         self.variables = {}
         self.debug = False
+        # True to build our dependencies ourselves; False if this is taken care
+        # of in some other way
+        self.build_dependencies = True
 
     def setup(self):
         pass
 
     def package(self, project, checkout, output_dir, options):
         tree = globals.trees.get(project, checkout, self)
-        tree.build_dependencies(options)
+        if self.build_dependencies:
+            tree.build_dependencies(options)
         tree.build(options)
         if len(inspect.getargspec(tree.cscript['package']).args) == 3:
             packages = tree.call('package', tree.version, options)
@@ -423,12 +427,14 @@ class Target(object):
 
     def build(self, project, checkout, options):
         tree = globals.trees.get(project, checkout, self)
-        tree.build_dependencies(options)
+        if self.build_dependencies:
+            tree.build_dependencies(options)
         tree.build(options)
 
     def test(self, tree, test, options):
         """test is the test case to run, or None"""
-        tree.build_dependencies(options)
+        if self.build_dependencies:
+            tree.build_dependencies(options)
         tree.build(options)
         return tree.call('test', test)
 
@@ -496,6 +502,24 @@ class DockerTarget(Target):
 
     def mount(self, m):
         self.mounts.append(m)
+
+
+class FlatpakTarget(Target):
+    def __init__(self, project, checkout):
+        super(FlatpakTarget, self).__init__('flatpak')
+        self.build_dependencies = False
+        self.project = project
+        self.checkout = checkout
+
+    def setup(self):
+        pass
+
+    def command(self, cmd):
+        command(cmd)
+
+    def checkout_dependencies(self):
+        tree = globals.trees.get(self.project, self.checkout, self)
+        return tree.checkout_dependencies()
 
 
 class WindowsTarget(DockerTarget):
@@ -679,6 +703,7 @@ class SourceTarget(Target):
 #    or mageia-version-{32,64}
 #    or osx-{32,64}
 #    or source
+#    or flatpak
 # @param debug True to build with debugging symbols (where possible)
 def target_factory(args):
     s = args.target
@@ -712,6 +737,8 @@ def target_factory(args):
             target = OSXUniversalTarget(args.work)
     elif s == 'source':
         target = SourceTarget()
+    elif s == 'flatpak':
+        target = FlatpakTarget(args.project, args.checkout)
 
     if target is None:
         raise Error("Bad target `%s'" % s)
@@ -801,7 +828,7 @@ class Tree(object):
                 if not k in options:
                     options[k] = v
 
-    def build_dependencies(self, options):
+    def dependencies(self, options):
         if not 'dependencies' in self.cscript:
             return
 
@@ -824,13 +851,17 @@ class Tree(object):
             # Then fill in the dependency's defaults
             dep.add_defaults(dep_options)
 
-            msg = 'Building dependency %s %s of %s' % (d[0], d[1], self.name)
-            if len(dep_options) > 0:
-                msg += ' with options %s' % dep_options
-            log(msg)
+            for i in dep.dependencies(dep_options):
+                yield i
+            yield (dep, options)
 
-            dep.build_dependencies(dep_options)
-            dep.build(dep_options)
+    def checkout_dependencies(self, options={}):
+        for i in self.dependencies(options):
+            pass
+
+    def build_dependencies(self, options):
+        for i in self.dependencies(options):
+            i[0].build(i[1])
 
     def build(self, options):
         if self.built:
