@@ -126,6 +126,12 @@ class Config:
         except:
             raise
 
+    def has(self, k):
+        for o in self.options:
+            if o.key == k:
+                return True
+        return False
+
     def get(self, k):
         for o in self.options:
             if o.key == k:
@@ -526,7 +532,10 @@ class FlatpakTarget(Target):
         return 'flatpak'
 
     def flatpak_builder(self):
-        return 'flatpak-builder --state-dir=%s' % config.get('flatpak_state_dir')
+        b = 'flatpak-builder'
+        if config.has('flatpak_state_dir'):
+            b += ' --state-dir=%s' % config.get('flatpak_state_dir')
+        return b
 
 
 class WindowsTarget(DockerTarget):
