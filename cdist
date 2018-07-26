@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-#    Copyright (C) 2012-2017 Carl Hetherington <cth@carlh.net>
+#    Copyright (C) 2012-2018 Carl Hetherington <cth@carlh.net>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -860,7 +860,7 @@ class Tree(object):
 
             for i in dep.dependencies(dep_options):
                 yield i
-            yield (dep, options)
+            yield (dep, dep_options)
 
     def checkout_dependencies(self, options={}):
         for i in self.dependencies(options):
