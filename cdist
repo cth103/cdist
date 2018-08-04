@@ -128,7 +128,7 @@ class Config:
 
     def has(self, k):
         for o in self.options:
-            if o.key == k:
+            if o.key == k and o.value is not None:
                 return True
         return False
 
