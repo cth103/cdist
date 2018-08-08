@@ -605,12 +605,14 @@ class LinuxTarget(DockerTarget):
     distro: distribution ('debian', 'ubuntu', 'centos' or 'fedora')
     version: distribution version (e.g. '12.04', '8', '6.5')
     bits: bitness of the distribution (32 or 64)
+    detail: None or 'appimage' if we are building for appimage
     """
 
     def __init__(self, distro, version, bits, directory=None):
         super(LinuxTarget, self).__init__('linux', directory, version)
         self.distro = distro
         self.bits = bits
+        self.detail = None
 
         self.set('CXXFLAGS', '-I%s/include' % self.directory)
         self.set('CPPFLAGS', '')
@@ -628,6 +630,12 @@ class LinuxTarget(DockerTarget):
         self.append_with_colon('PATH', '%s/bin' % self.directory)
         self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
         super(LinuxTarget, self).test(tree, test, options)
+
+
+class AppImageTarget(LinuxTarget):
+    def __init__(self, work):
+        super(AppImageTarget, self).__init__('ubuntu', '18.04', 64, work)
+        self.detail = 'appimage'
 
 
 class OSXTarget(Target):
@@ -720,6 +728,7 @@ class SourceTarget(Target):
 #    or osx-{32,64}
 #    or source
 #    or flatpak
+#    or appimage
 # @param debug True to build with debugging symbols (where possible)
 def target_factory(args):
     s = args.target
@@ -755,6 +764,8 @@ def target_factory(args):
         target = SourceTarget()
     elif s == 'flatpak':
         target = FlatpakTarget(args.project, args.checkout)
+    elif s == 'appimage':
+        target = AppImageTarget(args.work)
 
     if target is None:
         raise Error("Bad target `%s'" % s)
