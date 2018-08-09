@@ -492,12 +492,15 @@ class DockerTarget(Target):
         super(DockerTarget, self).__init__(platform, directory)
         self.version = version
         self.mounts = []
+        self.privileged = False
 
     def setup(self):
-        mounts = '-v %s:%s ' % (self.directory, self.directory)
+        opts = '-v %s:%s ' % (self.directory, self.directory)
         for m in self.mounts:
-            mounts += '-v %s:%s ' % (m, m)
-        self.container = command_and_read('%s run -u %s %s -itd %s /bin/bash' % (config.docker(), getpass.getuser(), mounts, self.image)).read().strip()
+            opts += '-v %s:%s ' % (m, m)
+        if self.privileged:
+            opts += '--privileged=true '
+        self.container = command_and_read('%s run -u %s %s -itd %s /bin/bash' % (config.docker(), getpass.getuser(), opts, self.image)).read().strip()
 
     def command(self, cmd):
         dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.directory))
@@ -636,6 +639,7 @@ class AppImageTarget(LinuxTarget):
     def __init__(self, work):
         super(AppImageTarget, self).__init__('ubuntu', '18.04', 64, work)
         self.detail = 'appimage'
+        self.privileged = True
 
 
 class OSXTarget(Target):
@@ -1002,7 +1006,7 @@ def main():
 
         target = target_factory(args)
 
-        if target.platform == 'linux':
+        if target.platform == 'linux' and target.detail != "appimage":
             if target.distro != 'arch':
                 output_dir = os.path.join(args.output, '%s-%s-%d' % (target.distro, target.version, target.bits))
             else:
