@@ -548,8 +548,8 @@ class WindowsTarget(DockerTarget):
     version: Windows version ('xp' or None)
     bits: bitness of Windows (32 or 64)
     name: name of our target e.g. x86_64-w64-mingw32.shared
-    library_prefix: path to Windows libraries
-    tool_path: path to toolchain binaries
+    environment_prefix: path to Windows environment for the appropriate target (libraries and some tools)
+    tool_path: path to 32- and 64-bit tools
     """
     def __init__(self, version, bits, directory=None):
         super(WindowsTarget, self).__init__('windows', directory, version)
@@ -560,18 +560,18 @@ class WindowsTarget(DockerTarget):
             self.name = 'i686-w64-mingw32.shared'
         else:
             self.name = 'x86_64-w64-mingw32.shared'
-        self.library_prefix = '%s/usr/%s' % (config.get('mxe_prefix'), self.name)
+        self.environment_prefix = '%s/usr/%s' % (config.get('mxe_prefix'), self.name)
 
-        self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.library_prefix)
+        self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.environment_prefix)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory))
-        self.set('PATH', '%s/bin:%s:%s' % (self.library_prefix, self.tool_path, os.environ['PATH']))
+        self.set('PATH', '%s/bin:%s:%s' % (self.environment_prefix, self.tool_path, os.environ['PATH']))
         self.set('CC', '%s-gcc' % self.name)
         self.set('CXX', '%s-g++' % self.name)
         self.set('LD', '%s-ld' % self.name)
         self.set('RANLIB', '%s-ranlib' % self.name)
         self.set('WINRC', '%s-windres' % self.name)
-        cxx = '-I%s/include -I%s/include' % (self.library_prefix, self.directory)
-        link = '-L%s/lib -L%s/lib' % (self.library_prefix, self.directory)
+        cxx = '-I%s/include -I%s/include' % (self.environment_prefix, self.directory)
+        link = '-L%s/lib -L%s/lib' % (self.environment_prefix, self.directory)
         self.set('CXXFLAGS', '"%s"' % cxx)
         self.set('CPPFLAGS', '')
         self.set('LINKFLAGS', '"%s"' % link)
@@ -580,23 +580,28 @@ class WindowsTarget(DockerTarget):
         self.image = 'windows'
 
     @property
+    def library_prefix(self):
+        log('Deprecated property library_prefix: use environment_prefix')
+        return self.environment_prefix
+
+    @property
     def windows_prefix(self):
-        log('Deprecated property windows_prefix')
-        return self.library_prefix
+        log('Deprecated property windows_prefix: use environment_prefix')
+        return self.environment_prefix
 
     @property
     def mingw_prefixes(self):
-        log('Deprecated property mingw_prefixes')
-        return [self.library_prefix]
+        log('Deprecated property mingw_prefixes: use environment_prefix')
+        return [self.environment_prefix]
 
     @property
     def mingw_path(self):
-        log('Deprecated property mingw_path')
+        log('Deprecated property mingw_path: use tool_path')
         return self.tool_path
 
     @property
     def mingw_name(self):
-        log('Deprecated property mingw_name')
+        log('Deprecated property mingw_name: use name')
         return self.name
 
 
