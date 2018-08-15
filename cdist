@@ -701,6 +701,7 @@ class OSXUniversalTarget(OSXTarget):
 
         for b in [32, 64]:
             target = OSXSingleTarget(b, os.path.join(self.directory, '%d' % b))
+            target.ccache = self.ccache
             tree = globals.trees.get(project, checkout, target)
             tree.build_dependencies(options)
             tree.build(options)
