@@ -677,9 +677,6 @@ class OSXSingleTarget(OSXTarget):
         enviro = '%s/%d' % (config.get('osx_environment_prefix'), bits)
 
         # Environment variables
-        if self.ccache:
-            self.set('CC', '"ccache gcc"')
-            self.set('CXX', '"ccache g++"')
         self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, enviro, flags))
         self.set('CPPFLAGS', '')
         self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, enviro, flags))
@@ -692,6 +689,15 @@ class OSXSingleTarget(OSXTarget):
     def package(self, project, checkout, output_dir, options):
         raise Error('cannot package non-universal OS X versions')
 
+    @property
+    def ccache(self):
+        return self.ccache
+
+    @ccache.setter
+    def ccache(self, v):
+        if v:
+            self.set('CC', '"ccache gcc"')
+            self.set('CXX', '"ccache g++"')
 
 class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
