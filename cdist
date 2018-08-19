@@ -402,7 +402,7 @@ class Target(object):
         # Environment variables that we will use when we call cscripts
         self.variables = {}
         self.debug = False
-        self.ccache = False
+        self._ccache = False
         # True to build our dependencies ourselves; False if this is taken care
         # of in some other way
         self.build_dependencies = True
@@ -490,6 +490,13 @@ class Target(object):
     def mount(self, m):
         pass
 
+    @property
+    def ccache(self):
+        return self._ccache
+
+    @ccache.setter
+    def ccache(self, v):
+        self._ccache = v
 
 
 class DockerTarget(Target):
@@ -689,15 +696,13 @@ class OSXSingleTarget(OSXTarget):
     def package(self, project, checkout, output_dir, options):
         raise Error('cannot package non-universal OS X versions')
 
-    @property
-    def ccache(self):
-        return self.ccache
-
-    @ccache.setter
+    @Target.ccache.setter
     def ccache(self, v):
+        Target.ccache.fset(self, v)
         if v:
             self.set('CC', '"ccache gcc"')
             self.set('CXX', '"ccache g++"')
+
 
 class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
