@@ -642,7 +642,7 @@ class LinuxTarget(DockerTarget):
 
 class AppImageTarget(LinuxTarget):
     def __init__(self, work):
-        super(AppImageTarget, self).__init__('ubuntu', '18.04', 64, work)
+        super(AppImageTarget, self).__init__('ubuntu', '14.04', 64, work)
         self.detail = 'appimage'
         self.privileged = True
 
