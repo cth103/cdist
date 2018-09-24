@@ -383,6 +383,7 @@ class Target(object):
     directory: directory to work in
     variables: dict of environment variables
     debug: True to build a debug version, otherwise False
+    ccache: True to use ccache, False to not
     set(a, b): set the value of variable 'a' to 'b'
     unset(a): unset the value of variable 'a'
     command(c): run the command 'c' in the build environment
@@ -398,19 +399,23 @@ class Target(object):
         self.platform = platform
         self.parallel = int(config.get('parallel'))
 
+        # Environment variables that we will use when we call cscripts
+        self.variables = {}
+        self.debug = False
+        self._ccache = False
+        # True to build our dependencies ourselves; False if this is taken care
+        # of in some other way
+        self.build_dependencies = True
+
         if directory is None:
             self.directory = tempfile.mkdtemp('', 'tmp', TEMPORARY_DIRECTORY)
             self.rmdir = True
+            self.set('CCACHE_BASEDIR', os.path.realpath(self.directory))
+            self.set('CCACHE_NOHASHDIR', '')
         else:
             self.directory = directory
             self.rmdir = False
 
-        # Environment variables that we will use when we call cscripts
-        self.variables = {}
-        self.debug = False
-        # True to build our dependencies ourselves; False if this is taken care
-        # of in some other way
-        self.build_dependencies = True
 
     def setup(self):
         pass
@@ -485,6 +490,13 @@ class Target(object):
     def mount(self, m):
         pass
 
+    @property
+    def ccache(self):
+        return self._ccache
+
+    @ccache.setter
+    def ccache(self, v):
+        self._ccache = v
 
 
 class DockerTarget(Target):
@@ -684,6 +696,13 @@ class OSXSingleTarget(OSXTarget):
     def package(self, project, checkout, output_dir, options):
         raise Error('cannot package non-universal OS X versions')
 
+    @Target.ccache.setter
+    def ccache(self, v):
+        Target.ccache.fset(self, v)
+        if v:
+            self.set('CC', '"ccache gcc"')
+            self.set('CXX', '"ccache g++"')
+
 
 class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
@@ -693,6 +712,7 @@ class OSXUniversalTarget(OSXTarget):
 
         for b in [32, 64]:
             target = OSXSingleTarget(b, os.path.join(self.directory, '%d' % b))
+            target.ccache = self.ccache
             tree = globals.trees.get(project, checkout, target)
             tree.build_dependencies(options)
             tree.build(options)
@@ -780,6 +800,7 @@ def target_factory(args):
         raise Error("Bad target `%s'" % s)
 
     target.debug = args.debug
+    target.ccache = args.ccache
 
     if args.environment is not None:
         for e in args.environment:
@@ -967,6 +988,7 @@ def main():
     parser.add_argument('-m', '--mount', help='mount a given directory in the build environment', action='append')
     parser.add_argument('--no-version-commit', help="use just tags for versioning, don't modify wscript, ChangeLog etc.", action='store_true')
     parser.add_argument('--option', help='set an option for the build (use --option key:value)', action='append')
+    parser.add_argument('--ccache', help='use ccache', action='store_true')
     args = parser.parse_args()
 
     # Override configured stuff
