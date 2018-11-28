@@ -260,7 +260,6 @@ def set_version_in_wscript(version):
 
         s = l.split()
         if len(s) == 3 and s[0] == "VERSION":
-            print("Writing %s" % version)
             print("VERSION = '%s'" % version, file=o)
         else:
             print(l, file=o, end="")
@@ -348,6 +347,14 @@ class Version:
             self.micro = int(p[2])
         else:
             self.micro = 0
+
+    @classmethod
+    def from_git_tag(cls, tag):
+        bits = tag.split('-')
+        c = cls(bits[0])
+        if int(bits[1]) > 0:
+            c.devel = True
+        return c
 
     def bump_minor(self):
         self.minor += 1
@@ -870,7 +877,8 @@ class Tree(object):
                 try:
                     self.version = Version(v)
                 except:
-                    self.version = Version(subprocess.Popen(shlex.split('git -C %s describe --tags --abbrev=0' % proj), stdout=subprocess.PIPE).communicate()[0][1:])
+                    tag = subprocess.Popen(shlex.split('git -C %s describe --tags' % proj), stdout=subprocess.PIPE).communicate()[0][1:]
+                    self.version = Version.from_git_tag(tag)
 
         os.chdir(cwd)
 
