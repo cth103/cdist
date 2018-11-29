@@ -352,7 +352,7 @@ class Version:
     def from_git_tag(cls, tag):
         bits = tag.split('-')
         c = cls(bits[0])
-        if int(bits[1]) > 0:
+        if len(bits) > 1 and int(bits[1]) > 0:
             c.devel = True
         return c
 
