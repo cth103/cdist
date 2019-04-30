@@ -519,6 +519,8 @@ class DockerTarget(Target):
             opts += '-v %s:%s ' % (m, m)
         if self.privileged:
             opts += '--privileged=true '
+        if self.ccache:
+            opts += "-e CCACHE_DIR=/ccache --volumes-from ccache-%s" % self.image
         self.container = command_and_read('%s run -u %s %s -itd %s /bin/bash' % (config.docker(), getpass.getuser(), opts, self.image)).read().strip()
 
     def command(self, cmd):
@@ -652,6 +654,12 @@ class LinuxTarget(DockerTarget):
             self.image = '%s-%s' % (self.distro, self.bits)
         else:
             self.image = '%s-%s-%s' % (self.distro, self.version, self.bits)
+
+    def setup(self):
+        super(LinuxTarget, self).setup()
+        if self.ccache:
+            self.set('CC', '"ccache gcc"')
+            self.set('CXX', '"ccache g++"')
 
     def test(self, tree, test, options):
         self.append_with_colon('PATH', '%s/bin' % self.directory)
