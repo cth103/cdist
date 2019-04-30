@@ -55,10 +55,10 @@ class Trees:
             if t.name == name and t.specifier == specifier and t.target == target:
                 return t
             elif t.name == name and t.specifier != specifier:
-                a = specifier
+                a = specifier if specifier is not None else "[Any]"
                 if required_by is not None:
                     a += ' by %s' % required_by
-                b = t.specifier
+                b = t.specifier if t.specifier is not None else "[Any]"
                 if t.required_by is not None:
                     b += ' by %s' % t.required_by
                 raise Error('conflicting versions of %s required (%s versus %s)' % (name, a, b))
