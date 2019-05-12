@@ -1047,27 +1047,32 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args)
+        target = None
+        try:
+            target = target_factory(args)
 
-        if target.platform == 'linux' and target.detail != "appimage":
-            if target.distro != 'arch':
-                output_dir = os.path.join(args.output, '%s-%s-%d' % (target.distro, target.version, target.bits))
+            if target.platform == 'linux' and target.detail != "appimage":
+                if target.distro != 'arch':
+                    output_dir = os.path.join(args.output, '%s-%s-%d' % (target.distro, target.version, target.bits))
+                else:
+                    output_dir = os.path.join(args.output, '%s-%d' % (target.distro, target.bits))
             else:
-                output_dir = os.path.join(args.output, '%s-%d' % (target.distro, target.bits))
-        else:
-            output_dir = args.output
+                output_dir = args.output
 
-        makedirs(output_dir)
+            makedirs(output_dir)
 
-        # Start with the options passed on the command line
-        options = copy.copy(argument_options(args))
-        # Fill in the defaults
-        tree = globals.trees.get(args.project, args.checkout, target)
-        tree.add_defaults(options)
+            # Start with the options passed on the command line
+            options = copy.copy(argument_options(args))
+            # Fill in the defaults
+            tree = globals.trees.get(args.project, args.checkout, target)
+            tree.add_defaults(options)
+            target.package(args.project, args.checkout, output_dir, options)
+        except Error as e:
+            if target is not None and not args.keep:
+                target.cleanup()
+            raise
 
-        target.package(args.project, args.checkout, output_dir, options)
-
-        if not args.keep:
+        if target is not None and not args.keep:
             target.cleanup()
 
     elif globals.command == 'release':
