@@ -535,8 +535,8 @@ class DockerTarget(Target):
         if config.get('docker_no_user'):
             user = ''
         else:
-            user = '-t %s' % getpass.getuser()
-        command('%s exec -u %s %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), user, self.container, self.variables_string(), dir, cmd))
+            user = '-u %s' % getpass.getuser()
+        command('%s exec %s -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), user, self.container, self.variables_string(), dir, cmd))
 
     def cleanup(self):
         super(DockerTarget, self).cleanup()
