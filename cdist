@@ -106,6 +106,7 @@ class Config:
                          Option('osx_sdk_prefix'),
                          Option('osx_sdk'),
                          BoolOption('docker_sudo'),
+                         BoolOption('docker_no_user'),
                          Option('docker_hub_repository'),
                          Option('flatpak_state_dir'),
                          Option('parallel', 4) ]
@@ -531,7 +532,11 @@ class DockerTarget(Target):
 
     def command(self, cmd):
         dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.directory))
-        command('%s exec -u %s -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), getpass.getuser(), self.container, self.variables_string(), dir, cmd))
+        if config.get('docker_no_user'):
+            user = ''
+        else:
+            user = '-t %s' % getpass.getuser()
+        command('%s exec -u %s %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), user, self.container, self.variables_string(), dir, cmd))
 
     def cleanup(self):
         super(DockerTarget, self).cleanup()
