@@ -515,6 +515,11 @@ class DockerTarget(Target):
         self.mounts = []
         self.privileged = False
 
+    def _user_tag(self):
+        if config.get('docker_no_user'):
+            return ''
+        return '-u %s' % getpass.getuser()
+
     def setup(self):
         opts = '-v %s:%s ' % (self.directory, self.directory)
         for m in self.mounts:
@@ -528,15 +533,11 @@ class DockerTarget(Target):
         if config.has('docker_hub_repository'):
             tag = '%s:%s' % (config.get('docker_hub_repository'), tag)
 
-        self.container = command_and_read('%s run -u %s %s -itd %s /bin/bash' % (config.docker(), getpass.getuser(), opts, tag)).read().strip()
+        self.container = command_and_read('%s run %s %s -itd %s /bin/bash' % (config.docker(), self._user_tag(), opts, tag)).read().strip()
 
     def command(self, cmd):
         dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.directory))
-        if config.get('docker_no_user'):
-            user = ''
-        else:
-            user = '-u %s' % getpass.getuser()
-        command('%s exec %s -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), user, self.container, self.variables_string(), dir, cmd))
+        command('%s exec %s -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), self._user_tag(), self.container, self.variables_string(), dir, cmd))
 
     def cleanup(self):
         super(DockerTarget, self).cleanup()
