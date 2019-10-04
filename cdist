@@ -30,6 +30,7 @@ import copy
 import inspect
 import getpass
 import shlex
+import multiprocessing
 
 TEMPORARY_DIRECTORY = '/var/tmp'
 
@@ -109,7 +110,7 @@ class Config:
                          BoolOption('docker_no_user'),
                          Option('docker_hub_repository'),
                          Option('flatpak_state_dir'),
-                         Option('parallel', 4) ]
+                         Option('parallel', multiprocessing.cpu_count()) ]
 
         try:
             f = open('%s/.config/cdist' % os.path.expanduser('~'), 'r')
