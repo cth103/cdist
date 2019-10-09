@@ -721,9 +721,6 @@ class OSXSingleTarget(OSXTarget):
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
         self.set('MACOSX_DEPLOYMENT_TARGET', config.get('osx_sdk'))
 
-    def package(self, project, checkout, output_dir, options):
-        raise Error('cannot package non-universal OS X versions')
-
     @Target.ccache.setter
     def ccache(self, v):
         Target.ccache.fset(self, v)
