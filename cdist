@@ -732,6 +732,7 @@ class OSXSingleTarget(OSXTarget):
 class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
+        self.bits = None
 
     def package(self, project, checkout, output_dir, options):
 
