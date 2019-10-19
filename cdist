@@ -106,6 +106,8 @@ class Config:
                          Option('osx_environment_prefix'),
                          Option('osx_sdk_prefix'),
                          Option('osx_sdk'),
+                         Option('apple_id'),
+                         Option('apple_password'),
                          BoolOption('docker_sudo'),
                          BoolOption('docker_no_user'),
                          Option('docker_hub_repository'),
@@ -693,6 +695,8 @@ class OSXTarget(Target):
         self.sdk = config.get('osx_sdk')
         self.sdk_prefix = config.get('osx_sdk_prefix')
         self.environment_prefix = config.get('osx_environment_prefix')
+        self.apple_id = config.get('apple_id')
+        self.apple_password = config.get('apple_password')
 
     def command(self, c):
         command('%s %s' % (self.variables_string(False), c))
