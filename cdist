@@ -236,9 +236,11 @@ def command(c):
 
 def command_and_read(c):
     log(c)
-    p = subprocess.Popen(c.split(), stdout=subprocess.PIPE)
-    f = os.fdopen(os.dup(p.stdout.fileno()))
-    return f
+    p = subprocess.Popen(c.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (out, err) = p.communicate()
+    if p.returncode != 0:
+        raise Error('command %s failed (%s)' % (c, err))
+    return out.splitlines()
 
 def read_wscript_variable(directory, variable):
     f = open('%s/wscript' % directory, 'r')
@@ -536,7 +538,7 @@ class DockerTarget(Target):
         if config.has('docker_hub_repository'):
             tag = '%s:%s' % (config.get('docker_hub_repository'), tag)
 
-        self.container = command_and_read('%s run %s %s -itd %s /bin/bash' % (config.docker(), self._user_tag(), opts, tag)).read().strip()
+        self.container = command_and_read('%s run %s %s -itd %s /bin/bash' % (config.docker(), self._user_tag(), opts, tag))[0].strip()
 
     def command(self, cmd):
         dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.directory))
@@ -886,7 +888,7 @@ class Tree(object):
             spec = 'master'
 
         command('git checkout %s %s %s' % (flags, spec, redirect))
-        self.git_commit = command_and_read('git rev-parse --short=7 HEAD').readline().strip()
+        self.git_commit = command_and_read('git rev-parse --short=7 HEAD')[0].strip()
         command('git submodule init --quiet')
         command('git submodule update --quiet')
 
@@ -1213,8 +1215,10 @@ def main():
         with TreeDirectory(tree):
             f = command_and_read('git log --tags --simplify-by-decoration --pretty="%d"')
             latest = None
+            line = 0
             while latest is None:
-                t = f.readline()
+                t = f[line]
+                line += 1
                 m = re.compile(".*\((.*)\).*").match(t)
                 if m:
                     tags = m.group(1).split(', ')
@@ -1260,7 +1264,7 @@ def main():
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
         with TreeDirectory(tree):
-            print(command_and_read('git rev-parse HEAD').readline().strip()[:7])
+            print(command_and_read('git rev-parse HEAD')[0].strip()[:7])
         target.cleanup()
 
     elif globals.command == 'checkout':
