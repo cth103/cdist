@@ -889,13 +889,16 @@ class Tree(object):
 
         command('git checkout %s %s %s' % (flags, spec, redirect))
         self.git_commit = command_and_read('git rev-parse --short=7 HEAD')[0].strip()
-        command('git submodule init --quiet')
-        command('git submodule update --quiet')
 
         proj = '%s/src/%s' % (target.directory, self.name)
 
         self.cscript = {}
         exec(open('%s/cscript' % proj).read(), self.cscript)
+
+        # cscript can include submodules = False to stop submodules being fetched
+        if not 'submodules' in self.cscript or self.cscript['submodules'] == True:
+            command('git submodule init --quiet')
+            command('git submodule update --quiet')
 
         if os.path.exists('%s/wscript' % proj):
             v = read_wscript_variable(proj, "VERSION");
