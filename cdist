@@ -114,6 +114,18 @@ class Config:
                          Option('flatpak_state_dir'),
                          Option('parallel', multiprocessing.cpu_count()) ]
 
+        config_dir = '%s/.config' % os.path.expanduser('~')
+        if not os.path.exists(config_dir):
+            os.mkdir(config_dir)
+        config_file = '%s/cdist' % config_dir
+        if not os.path.exists(config_file):
+            f = open(config_file, 'w')
+            for o in self.options:
+                print('# %s ' % o.key, file=f)
+            f.close()
+            print('Template config file written to %s; please edit and try again.' % config_file, file=sys.stderr)
+            sys.exit(1)
+
         try:
             f = open('%s/.config/cdist' % os.path.expanduser('~'), 'r')
             while True:
