@@ -970,11 +970,18 @@ class Tree(object):
 
     def build_dependencies(self, options):
         for i in self.dependencies(options):
+            global args
+            if args.verbose:
+                print('Building a dependency of %s %s %s with %s' % (self.name, self.specifier, self.version, options))
             i[0].build(i[1])
 
     def build(self, options):
         if self.built:
             return
+
+        global args
+        if args.verbose:
+            print("* Building %s %s %s with %s" % (self.name, self.specifier, self.version, options))
 
         variables = copy.copy(self.target.variables)
 
@@ -1042,6 +1049,8 @@ def main():
     parser.add_argument('--no-version-commit', help="use just tags for versioning, don't modify wscript, ChangeLog etc.", action='store_true')
     parser.add_argument('--option', help='set an option for the build (use --option key:value)', action='append')
     parser.add_argument('--ccache', help='use ccache', action='store_true')
+    parser.add_argument('--verbose', help='be verbose', action='store_true')
+    global args
     args = parser.parse_args()
 
     # Check for incorrect multiple parameters
