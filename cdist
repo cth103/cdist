@@ -553,7 +553,8 @@ class DockerTarget(Target):
 
     def command(self, cmd):
         dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.directory))
-        command('%s exec %s -i -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), self._user_tag(), self.container, self.variables_string(), dir, cmd))
+        interactive_flag = '-i ' if sys.stdin.isatty() else ''
+        command('%s exec %s %s -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), self._user_tag(), interactive_flag, self.container, self.variables_string(), dir, cmd))
 
     def cleanup(self):
         super(DockerTarget, self).cleanup()
