@@ -323,11 +323,11 @@ def get_options(args, target):
             if len(b) != 2:
                 raise Error("Bad option `%s'" % o)
             if b[1] == 'False':
-                opts[b[0]] = False
+                options[b[0]] = False
             elif b[1] == 'True':
-                opts[b[0]] = True
+                options[b[0]] = True
             else:
-                opts[b[0]] = b[1]
+                options[b[0]] = b[1]
     # Add defaults for any unspecified options
     tree = globals.trees.get(args.project, args.checkout, target)
     tree.add_defaults(options)
@@ -1086,6 +1086,8 @@ def main():
 
     if args.work is not None:
         args.work = os.path.abspath(args.work)
+        if not os.path.exists(args.work):
+            os.makedirs(args.work)
 
     if args.project is None and args.command != 'shell':
         raise Error('you must specify -p or --project')
