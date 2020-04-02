@@ -934,7 +934,13 @@ class Tree(object):
     def add_defaults(self, options):
         """Add the defaults from this into a dict options"""
         if 'option_defaults' in self.cscript:
-            for k, v in self.cscript['option_defaults']().items():
+            from_cscript = self.cscript['option_defaults']
+            if isinstance(from_cscript, dict):
+                defaults_dict = from_cscript
+            else:
+                log("Deprecated cscript option_defaults method; replace with a dict")
+                defaults_dict = from_cscript()
+            for k, v in default_dict.items():
                 if not k in options:
                     options[k] = v
 
