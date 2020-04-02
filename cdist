@@ -940,7 +940,7 @@ class Tree(object):
             else:
                 log("Deprecated cscript option_defaults method; replace with a dict")
                 defaults_dict = from_cscript()
-            for k, v in default_dict.items():
+            for k, v in defaults_dict.items():
                 if not k in options:
                     options[k] = v
 
