@@ -314,8 +314,9 @@ def devel_to_git(git_commit, filename):
         filename = filename.replace('devel', '-%s' % git_commit)
     return filename
 
-def argument_options(args):
-    opts = dict()
+
+def get_options(args, target):
+    options = dict()
     if args.option is not None:
         for o in args.option:
             b = o.split(':')
@@ -327,7 +328,10 @@ def argument_options(args):
                 opts[b[0]] = True
             else:
                 opts[b[0]] = b[1]
-    return opts
+    # Add defaults for any unspecified options
+    tree = globals.trees.get(args.project, args.checkout, target)
+    tree.add_defaults(options)
+    return options
 
 
 class TreeDirectory:
@@ -1100,7 +1104,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args)
-        target.build(args.project, args.checkout, argument_options(args))
+        target.build(args.project, args.checkout, get_options(args, target))
         if not args.keep:
             target.cleanup()
 
@@ -1121,13 +1125,7 @@ def main():
                 output_dir = args.output
 
             makedirs(output_dir)
-
-            # Start with the options passed on the command line
-            options = copy.copy(argument_options(args))
-            # Fill in the defaults
-            tree = globals.trees.get(args.project, args.checkout, target)
-            tree.add_defaults(options)
-            target.package(args.project, args.checkout, output_dir, options)
+            target.package(args.project, args.checkout, output_dir, get_options(args, target))
         except Error as e:
             if target is not None and not args.keep:
                 target.cleanup()
@@ -1286,7 +1284,7 @@ def main():
             target = target_factory(args)
             tree = globals.trees.get(args.project, args.checkout, target)
             with TreeDirectory(tree):
-                target.test(tree, args.test, argument_options(args))
+                target.test(tree, args.test, get_options(args, target))
         except Error as e:
             if target is not None and not args.keep:
                 target.cleanup()
