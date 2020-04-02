@@ -951,27 +951,26 @@ class Tree(object):
     def dependencies(self, options):
         """
         yield details of the dependencies of this tree.  Each dependency is returned
-        as a tuple of (tree, options)
+        as a tuple of (tree, options).  The 'options' parameter are the options that
+        we want to force for 'self'.
         """
         if not 'dependencies' in self.cscript:
             return
 
         if len(inspect.getargspec(self.cscript['dependencies']).args) == 2:
-            deps = self.call('dependencies', options)
+            self_options = copy.copy(options)
+            self.add_defaults(self_options)
+            deps = self.call('dependencies', self_options)
         else:
             log_normal("Deprecated cscript dependencies() method with no options parameter")
             deps = self.call('dependencies')
 
+        # Loop over our immediate dependencies
         for d in deps:
             dep = globals.trees.get(d[0], d[1], self.target, self.name)
 
-            # Start with the options passed in
-            dep_options = copy.copy(options)
-            # Override those options with anything the parent specifies
-            if len(d) > 2:
-                for k, v in d[2].items():
-                    dep_options[k] = v
-
+            # deps only get their options from the parent's cscript
+            dep_options = d[2] if len(d) > 2 else {}
             for i in dep.dependencies(dep_options):
                 yield i
             yield (dep, dep_options)
@@ -981,10 +980,10 @@ class Tree(object):
             pass
 
     def build_dependencies(self, options):
-        # Start with the options passed in
-        options = copy.copy(options)
-        # Fill in the defaults
-        self.add_defaults(options)
+        """
+        Called on the 'main' project tree (-p on the command line) to build all dependencies.
+        'options' will be the ones from the command line.
+        """
         for i in self.dependencies(options):
             i[0].build(i[1])
 
@@ -996,9 +995,7 @@ class Tree(object):
 
         variables = copy.copy(self.target.variables)
 
-        # Start with the options passed in
         options = copy.copy(options)
-        # Fill in the defaults
         self.add_defaults(options)
 
         if not globals.dry_run:
