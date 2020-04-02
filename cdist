@@ -1021,7 +1021,6 @@ def main():
         "package": "package and build project",
         "release": "release a project using its next version number (changing wscript and tagging)",
         "pot": "build the project's .pot files",
-        "changelog": "generate a simple HTML changelog",
         "manual": "build the project's manual",
         "doxygen": "build the project's Doxygen documentation",
         "latest": "print out the latest version",
@@ -1175,52 +1174,6 @@ def main():
         for p in pots:
             copyfile(p, '%s%s' % (args.output, os.path.basename(p)))
 
-        target.cleanup()
-
-    elif globals.command == 'changelog':
-        target = SourceTarget()
-        tree = globals.trees.get(args.project, args.checkout, target)
-
-        with TreeDirectory(tree):
-            text = open('ChangeLog', 'r')
-
-        html = tempfile.NamedTemporaryFile()
-        versions = 8
-
-        last = None
-        changes = []
-
-        while True:
-            l = text.readline()
-            if l == '':
-                break
-
-            if len(l) > 0 and l[0] == "\t":
-                s = l.split()
-                if len(s) == 4 and s[1] == "Version" and s[3] == "released.":
-                    v = Version(s[2])
-                    if v.micro == 0:
-                        if last is not None and len(changes) > 0:
-                            print("<h2>Changes between version %s and %s</h2>" % (s[2], last), file=html)
-                            print("<ul>", file=html)
-                            for c in changes:
-                                print("<li>%s" % c, file=html)
-                            print("</ul>", file=html)
-                        last = s[2]
-                        changes = []
-                        versions -= 1
-                        if versions < 0:
-                            break
-                else:
-                    c = l.strip()
-                    if len(c) > 0:
-                        if c[0] == '*':
-                            changes.append(c[2:])
-                        else:
-                            changes[-1] += " " + c
-
-        copyfile(html.file, '%schangelog.html' % args.output)
-        html.close()
         target.cleanup()
 
     elif globals.command == 'manual':
