@@ -172,9 +172,13 @@ config = Config()
 # Utility bits
 #
 
-def log(m):
+def log_normal(m):
     if not globals.quiet:
         print('\x1b[33m* %s\x1b[0m' % m)
+
+def log_verbose(m):
+    if globals.verbose:
+        print('\x1b[35m* %s\x1b[0m' % m)
 
 def escape_spaces(s):
     return s.replace(' ', '\\ ')
@@ -192,14 +196,14 @@ def mv_escape(n):
     return '\"%s\"' % n.substr(' ', '\\ ')
 
 def copytree(a, b):
-    log('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
+    log_normal('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
     if b.startswith('s3://'):
         command('s3cmd -P -r put "%s" "%s"' % (a, b))
     else:
         command('scp -r %s %s' % (scp_escape(a), scp_escape(b)))
 
 def copyfile(a, b):
-    log('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
+    log_normal('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
     if b.startswith('s3://'):
         command('s3cmd -P put "%s" "%s"' % (a, b))
     else:
@@ -233,21 +237,21 @@ def makedirs(d):
         command('ssh %s -- mkdir -p %s' % (s[0], s[1]))
 
 def rmdir(a):
-    log('remove %s' % a)
+    log_normal('remove %s' % a)
     os.rmdir(a)
 
 def rmtree(a):
-    log('remove %s' % a)
+    log_normal('remove %s' % a)
     shutil.rmtree(a, ignore_errors=True)
 
 def command(c):
-    log(c)
+    log_normal(c)
     r = os.system(c)
     if (r >> 8):
         raise Error('command %s failed' % c)
 
 def command_and_read(c):
-    log(c)
+    log_normal(c)
     p = subprocess.Popen(c.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     if p.returncode != 0:
@@ -291,7 +295,7 @@ def append_version_to_changelog(version):
     try:
         f = open('ChangeLog', 'r')
     except:
-        log('Could not open ChangeLog')
+        log_normal('Could not open ChangeLog')
         return
 
     c = f.read()
@@ -304,7 +308,7 @@ def append_version_to_changelog(version):
 
 def append_version_to_debian_changelog(version):
     if not os.path.exists('debian'):
-        log('Could not find debian directory')
+        log_normal('Could not find debian directory')
         return
 
     command('dch -b -v %s-1 "New upstream release."' % version)
@@ -315,7 +319,8 @@ def devel_to_git(git_commit, filename):
     return filename
 
 
-def get_options(args, target):
+def get_command_line_options(args):
+    """Get the options specified by --option on the command line"""
     options = dict()
     if args.option is not None:
         for o in args.option:
@@ -328,9 +333,6 @@ def get_options(args, target):
                 options[b[0]] = True
             else:
                 options[b[0]] = b[1]
-    # Add defaults for any unspecified options
-    tree = globals.trees.get(args.project, args.checkout, target)
-    tree.add_defaults(options)
     return options
 
 
@@ -451,14 +453,11 @@ class Target(object):
         pass
 
     def package(self, project, checkout, output_dir, options):
-        tree = globals.trees.get(project, checkout, self)
-        if self.build_dependencies:
-            tree.build_dependencies(options)
-        tree.build(options)
+        tree = self.build(project, checkout, options)
         if len(inspect.getargspec(tree.cscript['package']).args) == 3:
             packages = tree.call('package', tree.version, options)
         else:
-            log("Deprecated cscript package() method with no options parameter")
+            log_normal("Deprecated cscript package() method with no options parameter")
             packages = tree.call('package', tree.version)
 
         if isinstance(packages, (str, unicode)):
@@ -472,6 +471,7 @@ class Target(object):
         if self.build_dependencies:
             tree.build_dependencies(options)
         tree.build(options)
+        return tree
 
     def test(self, tree, test, options):
         """test is the test case to run, or None"""
@@ -638,27 +638,27 @@ class WindowsTarget(DockerTarget):
 
     @property
     def library_prefix(self):
-        log('Deprecated property library_prefix: use environment_prefix')
+        log_normal('Deprecated property library_prefix: use environment_prefix')
         return self.environment_prefix
 
     @property
     def windows_prefix(self):
-        log('Deprecated property windows_prefix: use environment_prefix')
+        log_normal('Deprecated property windows_prefix: use environment_prefix')
         return self.environment_prefix
 
     @property
     def mingw_prefixes(self):
-        log('Deprecated property mingw_prefixes: use environment_prefix')
+        log_normal('Deprecated property mingw_prefixes: use environment_prefix')
         return [self.environment_prefix]
 
     @property
     def mingw_path(self):
-        log('Deprecated property mingw_path: use tool_path')
+        log_normal('Deprecated property mingw_path: use tool_path')
         return self.tool_path
 
     @property
     def mingw_name(self):
-        log('Deprecated property mingw_name: use name')
+        log_normal('Deprecated property mingw_name: use name')
         return self.name
 
 
@@ -775,7 +775,7 @@ class OSXUniversalTarget(OSXTarget):
             if len(inspect.getargspec(tree.cscript['package']).args) == 3:
                 packages = tree.call('package', tree.version, options)
             else:
-                log("Deprecated cscript package() method with no options parameter")
+                log_normal("Deprecated cscript package() method with no options parameter")
                 packages = tree.call('package', tree.version)
             for p in packages:
                 copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
@@ -786,7 +786,7 @@ class SourceTarget(Target):
         super(SourceTarget, self).__init__('source')
 
     def command(self, c):
-        log('host -> %s' % c)
+        log_normal('host -> %s' % c)
         command('%s %s' % (self.variables_string(), c))
 
     def cleanup(self):
@@ -936,26 +936,30 @@ class Tree(object):
             return self.cscript[function](self.target, *args)
 
     def add_defaults(self, options):
-        """Add the defaults from this into a dict options"""
+        """Add the defaults from self into a dict options"""
         if 'option_defaults' in self.cscript:
             from_cscript = self.cscript['option_defaults']
             if isinstance(from_cscript, dict):
                 defaults_dict = from_cscript
             else:
-                log("Deprecated cscript option_defaults method; replace with a dict")
+                log_normal("Deprecated cscript option_defaults method; replace with a dict")
                 defaults_dict = from_cscript()
             for k, v in defaults_dict.items():
                 if not k in options:
                     options[k] = v
 
     def dependencies(self, options):
+        """
+        yield details of the dependencies of this tree.  Each dependency is returned
+        as a tuple of (tree, options)
+        """
         if not 'dependencies' in self.cscript:
             return
 
         if len(inspect.getargspec(self.cscript['dependencies']).args) == 2:
             deps = self.call('dependencies', options)
         else:
-            log("Deprecated cscript dependencies() method with no options parameter")
+            log_normal("Deprecated cscript dependencies() method with no options parameter")
             deps = self.call('dependencies')
 
         for d in deps:
@@ -963,13 +967,10 @@ class Tree(object):
 
             # Start with the options passed in
             dep_options = copy.copy(options)
-            # Add things specified by the parent
+            # Override those options with anything the parent specifies
             if len(d) > 2:
                 for k, v in d[2].items():
-                    if not k in dep_options:
-                        dep_options[k] = v
-            # Then fill in the dependency's defaults
-            dep.add_defaults(dep_options)
+                    dep_options[k] = v
 
             for i in dep.dependencies(dep_options):
                 yield i
@@ -980,19 +981,18 @@ class Tree(object):
             pass
 
     def build_dependencies(self, options):
+        # Start with the options passed in
+        options = copy.copy(options)
+        # Fill in the defaults
+        self.add_defaults(options)
         for i in self.dependencies(options):
-            global args
-            if args.verbose:
-                print('Building a dependency of %s %s %s with %s' % (self.name, self.specifier, self.version, options))
             i[0].build(i[1])
 
     def build(self, options):
         if self.built:
             return
 
-        global args
-        if args.verbose:
-            print("* Building %s %s %s with %s" % (self.name, self.specifier, self.version, options))
+        log_verbose("Building %s %s %s with %s" % (self.name, self.specifier, self.version, options))
 
         variables = copy.copy(self.target.variables)
 
@@ -1093,6 +1093,7 @@ def main():
         raise Error('you must specify -p or --project')
 
     globals.quiet = args.quiet
+    globals.verbose = args.verbose
     globals.command = args.command
     globals.dry_run = args.dry_run
 
@@ -1105,7 +1106,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args)
-        target.build(args.project, args.checkout, get_options(args, target))
+        target.build(args.project, args.checkout, get_command_line_options(args))
         if not args.keep:
             target.cleanup()
 
@@ -1126,7 +1127,7 @@ def main():
                 output_dir = args.output
 
             makedirs(output_dir)
-            target.package(args.project, args.checkout, output_dir, get_options(args, target))
+            target.package(args.project, args.checkout, output_dir, get_command_line_options(args))
         except Error as e:
             if target is not None and not args.keep:
                 target.cleanup()
@@ -1239,7 +1240,7 @@ def main():
             target = target_factory(args)
             tree = globals.trees.get(args.project, args.checkout, target)
             with TreeDirectory(tree):
-                target.test(tree, args.test, get_options(args, target))
+                target.test(tree, args.test, get_command_line_options(args))
         except Error as e:
             if target is not None and not args.keep:
                 target.cleanup()
