@@ -454,6 +454,7 @@ class Target(object):
 
     def package(self, project, checkout, output_dir, options):
         tree = self.build(project, checkout, options)
+        tree.add_defaults(options)
         if len(inspect.getargspec(tree.cscript['package']).args) == 3:
             packages = tree.call('package', tree.version, options)
         else:
