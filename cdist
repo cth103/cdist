@@ -256,7 +256,7 @@ def command_and_read(c):
     (out, err) = p.communicate()
     if p.returncode != 0:
         raise Error('command %s failed (%s)' % (c, err))
-    return out.splitlines()
+    return str(out, 'utf-8').splitlines()
 
 def read_wscript_variable(directory, variable):
     f = open('%s/wscript' % directory, 'r')
@@ -455,7 +455,7 @@ class Target(object):
     def package(self, project, checkout, output_dir, options):
         tree = self.build(project, checkout, options)
         tree.add_defaults(options)
-        if len(inspect.getargspec(tree.cscript['package']).args) == 3:
+        if len(inspect.getfullargspec(tree.cscript['package']).args) == 3:
             packages = tree.call('package', tree.version, options)
         else:
             log_normal("Deprecated cscript package() method with no options parameter")
@@ -927,7 +927,7 @@ class Tree(object):
                 try:
                     self.version = Version(v)
                 except:
-                    tag = subprocess.Popen(shlex.split('git -C %s describe --tags' % proj), stdout=subprocess.PIPE).communicate()[0][1:]
+                    tag = command_and_read('git -C %s describe --tags' % proj)[0][1:]
                     self.version = Version.from_git_tag(tag)
 
         os.chdir(cwd)
@@ -1000,7 +1000,7 @@ class Tree(object):
         self.add_defaults(options)
 
         if not globals.dry_run:
-            if len(inspect.getargspec(self.cscript['build']).args) == 2:
+            if len(inspect.getfullargspec(self.cscript['build']).args) == 2:
                 self.call('build', options)
             else:
                 self.call('build')
