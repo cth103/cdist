@@ -446,7 +446,7 @@ class Target(object):
             self.set('CCACHE_BASEDIR', os.path.realpath(self.directory))
             self.set('CCACHE_NOHASHDIR', '')
         else:
-            self.directory = directory
+            self.directory = os.path.realpath(directory)
             self.rmdir = False
 
 
@@ -542,14 +542,17 @@ class DockerTarget(Target):
             return ''
         return '-u %s' % getpass.getuser()
 
+    def _mount_option(self, d):
+        return '-v %s:%s ' % (os.path.realpath(d), os.path.realpath(d))
+
     def setup(self):
-        opts = '-v %s:%s ' % (self.directory, self.directory)
+        opts = self._mount_option(self.directory)
         for m in self.mounts:
-            opts += '-v %s:%s ' % (m, m)
+            opts += self._mount_option(m)
+        if config.has('git_reference'):
+            opts += self._mount_option(config.get('git_reference'))
         if self.privileged:
             opts += '--privileged=true '
-        if config.has('git_reference'):
-            opts += '-v %s:%s ' % (config.get('git_reference'), config.get('git_reference'))
         if self.ccache:
             opts += "-e CCACHE_DIR=/ccache/%s --mount source=ccache,target=/ccache" % self.image
 
