@@ -548,8 +548,10 @@ class DockerTarget(Target):
             opts += '-v %s:%s ' % (m, m)
         if self.privileged:
             opts += '--privileged=true '
+        if config.has('git_reference'):
+            opts += '-v %s:%s ' % (config.get('git_reference'), config.get('git_reference'))
         if self.ccache:
-            opts += "-e CCACHE_DIR=/ccache --volumes-from ccache-%s" % self.image
+            opts += "-e CCACHE_DIR=/ccache/%s --mount source=ccache,target=/ccache" % self.image
 
         tag = self.image
         if config.has('docker_hub_repository'):
