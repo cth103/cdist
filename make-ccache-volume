@@ -2,8 +2,10 @@
 
 docker volume create ccache
 id=$(docker run --mount source=ccache,target=/ccache -itd ubuntu-18.04-64 bash)
-for t in ubuntu-18.04-64 windows windows_2.15.x; do
-  docker exec $id mkdir /ccache/$t
-  docker exec $id chown carl /ccache/$t
+for u in 127 1000; do
+  for t in ubuntu-18.04-64 windows windows_2.15.x; do
+    docker exec $id mkdir /ccache/$t-$u
+    docker exec $id chmod 777 /ccache/$t-$u
+  done
 done
 docker kill $id
