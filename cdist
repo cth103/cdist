@@ -627,8 +627,6 @@ class WindowsTarget(DockerTarget):
         self.set('PKG_CONFIG_LIBDIR', '%s/lib/pkgconfig' % self.environment_prefix)
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '%s/bin:%s:%s' % (self.environment_prefix, self.tool_path, os.environ['PATH']))
-        self.set('CC', '%s-gcc' % self.name)
-        self.set('CXX', '%s-g++' % self.name)
         self.set('LD', '%s-ld' % self.name)
         self.set('RANLIB', '%s-ranlib' % self.name)
         self.set('WINRC', '%s-windres' % self.name)
@@ -642,6 +640,15 @@ class WindowsTarget(DockerTarget):
         self.image = 'windows'
         if environment_version is not None:
             self.image += '_%s' % environment_version
+
+    def setup(self):
+        super().setup()
+        if self.ccache:
+            self.set('CC', '"ccache %s-gcc"' % self.name)
+            self.set('CXX', '"ccache %s-g++"' % self.name)
+        else:
+            self.set('CC', '%s-gcc' % self.name)
+            self.set('CXX', '%s-g++' % self.name)
 
     @property
     def library_prefix(self):
