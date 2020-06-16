@@ -480,7 +480,13 @@ class Target(object):
         if self.build_dependencies:
             tree.build_dependencies(options)
         tree.build(options)
-        return tree.call('test', test)
+
+        tree.add_defaults(options)
+        if len(inspect.getfullargspec(tree.cscript['test']).args) == 3:
+            return tree.call('test', options, test)
+        else:
+            log_normal('Deprecated cscript test() method with no options parameter')
+            return tree.call('test', test)
 
     def set(self, a, b):
         self.variables[a] = b
