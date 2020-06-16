@@ -1,11 +1,13 @@
 #!/bin/bash
 
+docker volume rm ccache
 docker volume create ccache
-id=$(docker run --mount source=ccache,target=/ccache -itd ubuntu-18.04-64 bash)
-for u in 127 1000; do
+volume_id=$(docker run --mount source=ccache,target=/ccache -itd ubuntu-18.04-64 bash)
+for user in jenkins $USER; do
+  id=$(id -u $user)
   for t in ubuntu-18.04-64 windows windows_2.15.x; do
-    docker exec $id mkdir /ccache/$t-$u
-    docker exec $id chmod 777 /ccache/$t-$u
+    docker exec $volume_id mkdir /ccache/$t-$id
+    docker exec $volume_id chmod 777 /ccache/$t-$id
   done
 done
-docker kill $id
+docker kill $volume_id
