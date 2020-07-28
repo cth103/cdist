@@ -985,7 +985,7 @@ class Tree(object):
     def dependencies(self, options):
         """
         yield details of the dependencies of this tree.  Each dependency is returned
-        as a tuple of (tree, options).  The 'options' parameter are the options that
+        as a tuple of (tree, options, parent_tree).  The 'options' parameter are the options that
         we want to force for 'self'.
         """
         if not 'dependencies' in self.cscript:
@@ -1007,7 +1007,7 @@ class Tree(object):
             dep_options = d[2] if len(d) > 2 else {}
             for i in dep.dependencies(dep_options):
                 yield i
-            yield (dep, dep_options)
+            yield (dep, dep_options, self)
 
     def checkout_dependencies(self, options={}):
         for i in self.dependencies(options):
@@ -1058,7 +1058,8 @@ def main():
         "test": "run the project's unit tests",
         "shell": "build the project then start a shell",
         "checkout": "check out the project",
-        "revision": "print the head git revision number"
+        "revision": "print the head git revision number",
+        "dependencies" : "print details of the project's dependencies as a .dot file"
     }
 
     one_of = "Command is one of:\n"
@@ -1305,6 +1306,19 @@ def main():
         with TreeDirectory(tree):
             shutil.copytree('.', args.output)
         target.cleanup()
+
+    elif globals.command == 'dependencies':
+        if args.target is None:
+            raise Error('you must specify -t or --target')
+        if args.checkout is None:
+            raise Error('you must specify -c or --checkout')
+
+        target = target_factory(args)
+        tree = globals.trees.get(args.project, args.checkout, target)
+        print("strict digraph {")
+        for d in list(tree.dependencies({})):
+            print("%s -> %s;" % (d[2].name.replace("-", "-"), d[0].name.replace("-", "_")))
+        print("}")
 
     else:
         raise Error('invalid command %s' % globals.command)
