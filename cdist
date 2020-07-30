@@ -945,14 +945,14 @@ class Tree(object):
             paths = command_and_read('git config --file .gitmodules --get-regexp path')
             urls = command_and_read('git config --file .gitmodules --get-regexp url')
             for path, url in zip(paths, urls):
+                ref = ''
+                if config.has('git_reference'):
+                    url = url.split(' ')[1]
+                    ref_path = os.path.join(config.get('git_reference'), os.path.basename(url))
+                    if os.path.exists(ref_path):
+                        ref = '--reference %s' % ref_path
                 path = path.split(' ')[1]
-                url = url.split(' ')[1]
-            ref = ''
-            if config.has('git_reference'):
-                ref_path = os.path.join(config.get('git_reference'), os.path.basename(url))
-                if os.path.exists(ref_path):
-                    ref = '--reference %s' % ref_path
-            command('git submodule --quiet update %s %s' % (ref, path))
+                command('git submodule --quiet update %s %s' % (ref, path))
 
         if os.path.exists('%s/wscript' % proj):
             v = read_wscript_variable(proj, "VERSION");
