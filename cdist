@@ -278,45 +278,6 @@ def read_wscript_variable(directory, variable):
     f.close()
     return None
 
-def set_version_in_wscript(version):
-    f = open('wscript', 'rw')
-    o = open('wscript.tmp', 'w')
-    while True:
-        l = f.readline()
-        if l == '':
-            break
-
-        s = l.split()
-        if len(s) == 3 and s[0] == "VERSION":
-            print("VERSION = '%s'" % version, file=o)
-        else:
-            print(l, file=o, end="")
-    f.close()
-    o.close()
-
-    os.rename('wscript.tmp', 'wscript')
-
-def append_version_to_changelog(version):
-    try:
-        f = open('ChangeLog', 'r')
-    except:
-        log_normal('Could not open ChangeLog')
-        return
-
-    c = f.read()
-    f.close()
-
-    f = open('ChangeLog', 'w')
-    now = datetime.datetime.now()
-    f.write('%d-%02d-%02d  Carl Hetherington  <cth@carlh.net>\n\n\t* Version %s released.\n\n' % (now.year, now.month, now.day, version))
-    f.write(c)
-
-def append_version_to_debian_changelog(version):
-    if not os.path.exists('debian'):
-        log_normal('Could not find debian directory')
-        return
-
-    command('dch -b -v %s-1 "New upstream release."' % version)
 
 def devel_to_git(git_commit, filename):
     if git_commit is not None:
@@ -1145,7 +1106,6 @@ def main():
     parser.add_argument('-n', '--dry-run', help='run the process without building anything', action='store_true')
     parser.add_argument('-e', '--environment', help='pass the value of the named environment variable into the build', action='append')
     parser.add_argument('-m', '--mount', help='mount a given directory in the build environment', action='append')
-    parser.add_argument('--no-version-commit', help="use just tags for versioning, don't modify wscript, ChangeLog etc.", action='store_true')
     parser.add_argument('--option', help='set an option for the build (use --option key:value)', action='append')
     parser.add_argument('--ccache', help='use ccache', action='store_true')
     parser.add_argument('--verbose', help='be verbose', action='store_true')
@@ -1241,20 +1201,7 @@ def main():
             version.bump_micro()
 
         with TreeDirectory(tree):
-            if not args.no_version_commit:
-                set_version_in_wscript(version)
-                append_version_to_changelog(version)
-                append_version_to_debian_changelog(version)
-                command('git commit -a -m "Bump version"')
-
             command('git tag -m "v%s" v%s' % (version, version))
-
-            if not args.no_version_commit:
-                version.to_devel()
-                set_version_in_wscript(version)
-                command('git commit -a -m "Bump version"')
-                command('git push')
-
             command('git push --tags')
 
         target.cleanup()
