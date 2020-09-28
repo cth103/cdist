@@ -1059,7 +1059,7 @@ def main():
 
     commands = {
         "build": "build project",
-        "package": "package and build project",
+        "package": "build and package project",
         "release": "release a project using its next version number (changing wscript and tagging)",
         "pot": "build the project's .pot files",
         "manual": "build the project's manual",
