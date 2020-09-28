@@ -208,7 +208,7 @@ def copytree(a, b):
         command('scp -r %s %s' % (scp_escape(a), scp_escape(b)))
 
 def copyfile(a, b):
-    log_normal('copy %s -> %s' % (scp_escape(a), scp_escape(b)))
+    log_normal('copy %s -> %s with cwd %s' % (scp_escape(a), scp_escape(b), os.getcwd()))
     if b.startswith('s3://'):
         command('s3cmd -P put "%s" "%s"' % (a, b))
     else:
@@ -457,20 +457,24 @@ class Target(object):
     def setup(self):
         pass
 
-    def package(self, project, checkout, output_dir, options):
-        tree = self.build(project, checkout, options)
-        tree.add_defaults(options)
+    def _build_packages(self, tree, options):
         if len(inspect.getfullargspec(tree.cscript['package']).args) == 3:
             packages = tree.call('package', tree.version, options)
         else:
             log_normal("Deprecated cscript package() method with no options parameter")
             packages = tree.call('package', tree.version)
 
-        if isinstance(packages, list):
-            for p in packages:
-                copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
-        else:
-            copyfile(packages, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, packages))))
+        return packages if isinstance(packages, list) else [packages]
+
+    def _copy_packages(self, tree, packages, output_dir):
+        for p in packages:
+            copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
+
+    def package(self, project, checkout, output_dir, options, no_notarize):
+        tree = self.build(project, checkout, options)
+        tree.add_defaults(options)
+        p = self._build_packages(tree, options)
+        self._copy_packages(tree, p, output_dir)
 
     def build(self, project, checkout, options):
         tree = globals.trees.get(project, checkout, self)
@@ -735,6 +739,38 @@ class AppImageTarget(LinuxTarget):
         self.privileged = True
 
 
+def notarize(dmg, bundle_id):
+    p = subprocess.run(
+        ['xcrun', 'altool', '--notarize-app', '-t', 'osx', '-f', dmg, '--primary-bundle-id', bundle_id, '-u', config.get('apple_id'), '-p', config.get('apple_password'), '--output-format', 'xml'],
+        capture_output=True
+        )
+
+    def string_after(process, key):
+        lines = p.stdout.decode('utf-8').splitlines()
+        request_uuid = None
+        for i in range(0, len(lines)):
+            if lines[i].find(key) != -1:
+                return lines[i+1].strip().replace('<string>', '').replace('</string>', '')
+
+        raise Error("Missing expected response %s from Apple" % key)
+
+    request_uuid = string_after(p, "RequestUUID")
+
+    for i in range(0, 30):
+        print('Checking up on %s' % request_uuid)
+        p = subprocess.run(['xcrun', 'altool', '--notarization-info', request_uuid, '-u', apple_id, '-p', apple_password, '--output-format', 'xml'], capture_output=True)
+        status = string_after(p, 'Status')
+        print('Got %s' % status)
+        if status == 'invalid':
+            raise Error("Notarization failed")
+        elif status == 'success':
+            subprocess.run(['xcrun', 'stapler', 'staple', dmg])
+            return
+        time.sleep(30)
+
+    raise Error("Notarization timed out")
+
+
 class OSXTarget(Target):
     def __init__(self, directory=None):
         super(OSXTarget, self).__init__('osx', directory)
@@ -785,13 +821,24 @@ class OSXSingleTarget(OSXTarget):
             self.set('CC', '"ccache gcc"')
             self.set('CXX', '"ccache g++"')
 
+    def package(self, project, checkout, output_dir, options, no_notarize):
+        tree = self.build(project, checkout, options)
+        tree.add_defaults(options)
+        p = self._build_packages(tree, options)
+        for x in p:
+            if not isinstance(x, tuple):
+                raise Error('macOS packages must be returned from cscript as tuples of (dmg-filename, bundle-id)')
+        if not no_notarize:
+            notarize(x[0], x[1])
+        self._copy_packages(tree, [x[0] for x in p], output_dir)
+
 
 class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
         self.bits = None
 
-    def package(self, project, checkout, output_dir, options):
+    def package(self, project, checkout, output_dir, options, no_notarize):
 
         for b in [32, 64]:
             target = OSXSingleTarget(b, os.path.join(self.directory, '%d' % b))
@@ -1102,6 +1149,7 @@ def main():
     parser.add_argument('--option', help='set an option for the build (use --option key:value)', action='append')
     parser.add_argument('--ccache', help='use ccache', action='store_true')
     parser.add_argument('--verbose', help='be verbose', action='store_true')
+    parser.add_argument('--no-notarize', help='don\'t notarize .dmg packages', action='store_true')
     global args
     args = parser.parse_args()
 
@@ -1169,7 +1217,7 @@ def main():
                 output_dir = args.output
 
             makedirs(output_dir)
-            target.package(args.project, args.checkout, output_dir, get_command_line_options(args))
+            target.package(args.project, args.checkout, output_dir, get_command_line_options(args), args.no_notarize)
         except Error as e:
             if target is not None and not args.keep:
                 target.cleanup()
