@@ -17,20 +17,22 @@
 #    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 from __future__ import print_function
-import os
-import sys
-import shutil
-import glob
-import tempfile
+
 import argparse
-import datetime
-import subprocess
-import re
 import copy
-import inspect
+import datetime
 import getpass
-import shlex
+import glob
+import inspect
 import multiprocessing
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
 
 TEMPORARY_DIRECTORY = '/var/tmp'
 
