@@ -107,6 +107,8 @@ class Config:
                          Option('osx_environment_prefix'),
                          Option('osx_sdk_prefix'),
                          Option('osx_sdk'),
+                         Option('osx_keychain_file'),
+                         Option('osx_keychain_password'),
                          Option('apple_id'),
                          Option('apple_password'),
                          BoolOption('docker_sudo'),
@@ -739,9 +741,15 @@ class OSXTarget(Target):
         self.environment_prefix = config.get('osx_environment_prefix')
         self.apple_id = config.get('apple_id')
         self.apple_password = config.get('apple_password')
+        self.osx_keychain_file = config.get('osx_keychain_file')
+        self.osx_keychain_password = config.get('osx_keychain_password')
 
     def command(self, c):
         command('%s %s' % (self.variables_string(False), c))
+
+    def build(self, *a, **k):
+        self.command('security unlock-keychain -p %s %s' % (self.osx_keychain_password, self.osx_keychain_file))
+        return super().build(*a, **k)
 
 
 class OSXSingleTarget(OSXTarget):
