@@ -448,10 +448,6 @@ class Target(object):
         """test is the test case to run, or None"""
         tree = globals.trees.get(project, checkout, target)
 
-        if self.build_dependencies:
-            tree.build_dependencies(options)
-        tree.build(options)
-
         tree.add_defaults(options)
         with TreeDirectory(tree):
             if len(inspect.getfullargspec(tree.cscript['test']).args) == 3:
@@ -1288,7 +1284,9 @@ def main():
         target = None
         try:
             target = target_factory(args)
-            target.test(args.project, args.checkout, target, args.test, get_command_line_options(args))
+            options = get_command_line_options(args)
+            target.build(args.project, args.checkout, options)
+            target.test(args.project, args.checkout, target, args.test, options)
         finally:
             if target is not None and not args.keep:
                 target.cleanup()
