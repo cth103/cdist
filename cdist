@@ -876,7 +876,7 @@ def target_factory(args):
     elif s.startswith('osx-'):
         target = OSXSingleTarget(int(s.split('-')[1]), args.work)
     elif s == 'osx':
-        if globals.command == 'build':
+        if args.command == 'build':
             target = OSXSingleTarget(64, args.work)
         else:
             target = OSXUniversalTarget(args.work)
@@ -1059,6 +1059,7 @@ class Tree(object):
         self.target.variables = variables
         self.built = True
 
+
 #
 # Command-line parser
 #
@@ -1067,27 +1068,26 @@ def main():
 
     commands = {
         "build": "build project",
-        "package": "build and package project",
-        "release": "release a project using its next version number (changing wscript and tagging)",
+        "package": "build and package the project",
+        "release": "release a project using its next version number (adding a tag)",
         "pot": "build the project's .pot files",
         "manual": "build the project's manual",
         "doxygen": "build the project's Doxygen documentation",
         "latest": "print out the latest version",
-        "test": "run the project's unit tests",
+        "test": "build the project and run its unit tests",
         "shell": "build the project then start a shell",
         "checkout": "check out the project",
         "revision": "print the head git revision number",
         "dependencies" : "print details of the project's dependencies as a .dot file"
     }
 
-    one_of = "Command is one of:\n"
+    one_of = ""
     summary = ""
     for k, v in commands.items():
-        one_of += "\t%s\t%s\n" % (k, v)
+        one_of += "\t%s%s\n" % (k.ljust(20), v)
         summary += k + " "
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', help=summary)
     parser.add_argument('-p', '--project', help='project name')
     parser.add_argument('--minor', help='minor version number bump', action='store_true')
     parser.add_argument('--micro', help='micro version number bump', action='store_true')
@@ -1110,6 +1110,21 @@ def main():
     parser.add_argument('--ccache', help='use ccache', action='store_true')
     parser.add_argument('--verbose', help='be verbose', action='store_true')
     parser.add_argument('--no-notarize', help='don\'t notarize .dmg packages', action='store_true')
+
+    subparsers = parser.add_subparsers(help='command to run', dest='command')
+    parser_build = subparsers.add_parser("build", help="build project")
+    parser_package = subparsers.add_parser("package", help="build and package project")
+    parser_release = subparsers.add_parser("release", help="release a project using its next version number (adding a tag)")
+    parser_pot = subparsers.add_parser("pot", help="build the project's .pot files")
+    parser_manual = subparsers.add_parser("manual", help="build the project's manual")
+    parser_doxygen = subparsers.add_parser("doxygen", help="build the project's Doxygen documentation")
+    parser_latest = subparsers.add_parser("latest", help="print out the latest version")
+    parser_test = subparsers.add_parser("test", help="build the project and run its unit tests")
+    parser_shell = subparsers.add_parser("shell", help="build the project then start a shell")
+    parser_checkout = subparsers.add_parser("checkout", help="check out the project")
+    parser_revision = subparsers.add_parser("revision", help="print the head git revision number")
+    parser_dependencies = subparsers.add_parser("dependencies", help="print details of the project's dependencies as a .dot file")
+
     global args
     args = parser.parse_args()
 
@@ -1144,14 +1159,9 @@ def main():
 
     globals.quiet = args.quiet
     globals.verbose = args.verbose
-    globals.command = args.command
     globals.dry_run = args.dry_run
 
-    if not globals.command in commands:
-        e = 'command must be one of:\n' + one_of
-        raise Error('command must be one of:\n%s' % one_of)
-
-    if globals.command == 'build':
+    if args.command == 'build':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
@@ -1160,7 +1170,7 @@ def main():
         if not args.keep:
             target.cleanup()
 
-    elif globals.command == 'package':
+    elif args.command == 'package':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
@@ -1186,7 +1196,7 @@ def main():
         if target is not None and not args.keep:
             target.cleanup()
 
-    elif globals.command == 'release':
+    elif args.command == 'release':
         if args.minor is False and args.micro is False:
             raise Error('you must specify --minor or --micro')
 
@@ -1206,7 +1216,7 @@ def main():
 
         target.cleanup()
 
-    elif globals.command == 'pot':
+    elif args.command == 'pot':
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
 
@@ -1216,7 +1226,7 @@ def main():
 
         target.cleanup()
 
-    elif globals.command == 'manual':
+    elif args.command == 'manual':
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
 
@@ -1229,7 +1239,7 @@ def main():
 
         target.cleanup()
 
-    elif globals.command == 'doxygen':
+    elif args.command == 'doxygen':
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
 
@@ -1242,7 +1252,7 @@ def main():
 
         target.cleanup()
 
-    elif globals.command == 'latest':
+    elif args.command == 'latest':
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
 
@@ -1268,7 +1278,7 @@ def main():
         print(latest)
         target.cleanup()
 
-    elif globals.command == 'test':
+    elif args.command == 'test':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
@@ -1286,14 +1296,14 @@ def main():
         if target is not None and not args.keep:
             target.cleanup()
 
-    elif globals.command == 'shell':
+    elif args.command == 'shell':
         if args.target is None:
             raise Error('you must specify -t or --target')
 
         target = target_factory(args)
         target.command('bash')
 
-    elif globals.command == 'revision':
+    elif args.command == 'revision':
 
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
@@ -1301,7 +1311,7 @@ def main():
             print(command_and_read('git rev-parse HEAD')[0].strip()[:7])
         target.cleanup()
 
-    elif globals.command == 'checkout':
+    elif args.command == 'checkout':
 
         if args.output is None:
             raise Error('you must specify -o or --output')
@@ -1312,7 +1322,7 @@ def main():
             shutil.copytree('.', args.output)
         target.cleanup()
 
-    elif globals.command == 'dependencies':
+    elif args.command == 'dependencies':
         if args.target is None:
             raise Error('you must specify -t or --target')
         if args.checkout is None:
@@ -1325,8 +1335,6 @@ def main():
             print("%s -> %s;" % (d[2].name.replace("-", "-"), d[0].name.replace("-", "_")))
         print("}")
 
-    else:
-        raise Error('invalid command %s' % globals.command)
 
 try:
     main()
