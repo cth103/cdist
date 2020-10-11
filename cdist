@@ -444,18 +444,21 @@ class Target(object):
         tree.build(options)
         return tree
 
-    def test(self, tree, test, options):
+    def test(self, project, checkout, target, options):
         """test is the test case to run, or None"""
+        tree = globals.trees.get(project, checkout, target)
+
         if self.build_dependencies:
             tree.build_dependencies(options)
         tree.build(options)
 
         tree.add_defaults(options)
-        if len(inspect.getfullargspec(tree.cscript['test']).args) == 3:
-            return tree.call('test', options, test)
-        else:
-            log_normal('Deprecated cscript test() method with no options parameter')
-            return tree.call('test', test)
+        with TreeDirectory(tree):
+            if len(inspect.getfullargspec(tree.cscript['test']).args) == 3:
+                return tree.call('test', options, test)
+            else:
+                log_normal('Deprecated cscript test() method with no options parameter')
+                return tree.call('test', test)
 
     def set(self, a, b):
         self.variables[a] = b
@@ -687,10 +690,10 @@ class LinuxTarget(DockerTarget):
             self.set('CC', '"ccache gcc"')
             self.set('CXX', '"ccache g++"')
 
-    def test(self, tree, test, options):
+    def test(self, project, checkout, target, test, options):
         self.append_with_colon('PATH', '%s/bin' % self.directory)
         self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
-        super(LinuxTarget, self).test(tree, test, options)
+        super(LinuxTarget, self).test(project, checkout, target, test, options)
 
 
 class AppImageTarget(LinuxTarget):
@@ -1285,16 +1288,10 @@ def main():
         target = None
         try:
             target = target_factory(args)
-            tree = globals.trees.get(args.project, args.checkout, target)
-            with TreeDirectory(tree):
-                target.test(tree, args.test, get_command_line_options(args))
-        except Error as e:
+            target.test(args.project, args.checkout, target, args.test, get_command_line_options(args))
+        finally:
             if target is not None and not args.keep:
                 target.cleanup()
-            raise
-
-        if target is not None and not args.keep:
-            target.cleanup()
 
     elif args.command == 'shell':
         if args.target is None:
