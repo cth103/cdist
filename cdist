@@ -70,6 +70,10 @@ class Trees:
         self.trees.append(nt)
         return nt
 
+    def add_built(self, name, specifier, target):
+        self.trees.append(Tree(name, specifier, target, None, built=True))
+
+
 class Globals:
     quiet = False
     command = None
@@ -444,7 +448,7 @@ class Target(object):
         tree.build(options)
         return tree
 
-    def test(self, project, checkout, target, options):
+    def test(self, project, checkout, target, test, options):
         """test is the test case to run, or None"""
         tree = globals.trees.get(project, checkout, target)
 
@@ -921,55 +925,56 @@ class Tree(object):
            required_by -- name of the tree that requires this one
     """
 
-    def __init__(self, name, specifier, target, required_by):
+    def __init__(self, name, specifier, target, required_by, built=False):
         self.name = name
         self.specifier = specifier
         self.target = target
         self.version = None
         self.git_commit = None
-        self.built = False
+        self.built = built
         self.required_by = required_by
 
         cwd = os.getcwd()
-
-        flags = ''
-        redirect = ''
-        if globals.quiet:
-            flags = '-q'
-            redirect = '>/dev/null'
-        if config.has('git_reference'):
-            ref = '--reference-if-able %s/%s.git' % (config.get('git_reference'), self.name)
-        else:
-            ref = ''
-        command('git clone %s %s %s/%s.git %s/src/%s' % (flags, ref, config.get('git_prefix'), self.name, target.directory, self.name))
-        os.chdir('%s/src/%s' % (target.directory, self.name))
-
-        spec = self.specifier
-        if spec is None:
-            spec = 'master'
-
-        command('git checkout %s %s %s' % (flags, spec, redirect))
-        self.git_commit = command_and_read('git rev-parse --short=7 HEAD')[0].strip()
-
         proj = '%s/src/%s' % (target.directory, self.name)
+
+        if not built:
+            flags = ''
+            redirect = ''
+            if globals.quiet:
+                flags = '-q'
+                redirect = '>/dev/null'
+            if config.has('git_reference'):
+                ref = '--reference-if-able %s/%s.git' % (config.get('git_reference'), self.name)
+            else:
+                ref = ''
+            command('git clone %s %s %s/%s.git %s/src/%s' % (flags, ref, config.get('git_prefix'), self.name, target.directory, self.name))
+            os.chdir('%s/src/%s' % (target.directory, self.name))
+
+            spec = self.specifier
+            if spec is None:
+                spec = 'master'
+
+            command('git checkout %s %s %s' % (flags, spec, redirect))
+            self.git_commit = command_and_read('git rev-parse --short=7 HEAD')[0].strip()
 
         self.cscript = {}
         exec(open('%s/cscript' % proj).read(), self.cscript)
 
-        # cscript can include submodules = False to stop submodules being fetched
-        if (not 'submodules' in self.cscript or self.cscript['submodules'] == True) and os.path.exists('.gitmodules'):
-            command('git submodule --quiet init')
-            paths = command_and_read('git config --file .gitmodules --get-regexp path')
-            urls = command_and_read('git config --file .gitmodules --get-regexp url')
-            for path, url in zip(paths, urls):
-                ref = ''
-                if config.has('git_reference'):
-                    url = url.split(' ')[1]
-                    ref_path = os.path.join(config.get('git_reference'), os.path.basename(url))
-                    if os.path.exists(ref_path):
-                        ref = '--reference %s' % ref_path
-                path = path.split(' ')[1]
-                command('git submodule --quiet update %s %s' % (ref, path))
+        if not built:
+            # cscript can include submodules = False to stop submodules being fetched
+            if (not 'submodules' in self.cscript or self.cscript['submodules'] == True) and os.path.exists('.gitmodules'):
+                command('git submodule --quiet init')
+                paths = command_and_read('git config --file .gitmodules --get-regexp path')
+                urls = command_and_read('git config --file .gitmodules --get-regexp url')
+                for path, url in zip(paths, urls):
+                    ref = ''
+                    if config.has('git_reference'):
+                        url = url.split(' ')[1]
+                        ref_path = os.path.join(config.get('git_reference'), os.path.basename(url))
+                        if os.path.exists(ref_path):
+                            ref = '--reference %s' % ref_path
+                    path = path.split(' ')[1]
+                    command('git submodule --quiet update %s %s' % (ref, path))
 
         if os.path.exists('%s/wscript' % proj):
             v = read_wscript_variable(proj, "VERSION");
@@ -1088,10 +1093,6 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--project', help='project name')
-    parser.add_argument('--minor', help='minor version number bump', action='store_true')
-    parser.add_argument('--micro', help='micro version number bump', action='store_true')
-    parser.add_argument('--latest-major', help='major version to return with latest', type=int)
-    parser.add_argument('--latest-minor', help='minor version to return with latest', type=int)
     parser.add_argument('-c', '--checkout', help='string to pass to git for checkout')
     parser.add_argument('-o', '--output', help='output directory', default='.')
     parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
@@ -1101,24 +1102,29 @@ def main():
     parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
     parser.add_argument('-w', '--work', help='override default work directory')
     parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
-    parser.add_argument('--test', help="name of test to run (with `test'), defaults to all")
     parser.add_argument('-n', '--dry-run', help='run the process without building anything', action='store_true')
     parser.add_argument('-e', '--environment', help='pass the value of the named environment variable into the build', action='append')
     parser.add_argument('-m', '--mount', help='mount a given directory in the build environment', action='append')
     parser.add_argument('--option', help='set an option for the build (use --option key:value)', action='append')
     parser.add_argument('--ccache', help='use ccache', action='store_true')
     parser.add_argument('--verbose', help='be verbose', action='store_true')
-    parser.add_argument('--no-notarize', help='don\'t notarize .dmg packages', action='store_true')
 
     subparsers = parser.add_subparsers(help='command to run', dest='command')
     parser_build = subparsers.add_parser("build", help="build project")
     parser_package = subparsers.add_parser("package", help="build and package project")
+    parser_package.add_argument('--no-notarize', help='do not notarize .dmg packages', action='store_true')
     parser_release = subparsers.add_parser("release", help="release a project using its next version number (adding a tag)")
+    parser_release.add_argument('--minor', help='minor version number bump', action='store_true')
+    parser_release.add_argument('--micro', help='micro version number bump', action='store_true')
     parser_pot = subparsers.add_parser("pot", help="build the project's .pot files")
     parser_manual = subparsers.add_parser("manual", help="build the project's manual")
     parser_doxygen = subparsers.add_parser("doxygen", help="build the project's Doxygen documentation")
     parser_latest = subparsers.add_parser("latest", help="print out the latest version")
+    parser_latest.add_argument('--latest-major', help='major version to return', type=int)
+    parser_latest.add_argument('--latest-minor', help='minor version to return', type=int)
     parser_test = subparsers.add_parser("test", help="build the project and run its unit tests")
+    parser_test.add_argument('--no-implicit-build', help='do not build first', action='store_true')
+    parser_test.add_argument('--test', help="name of test to run, defaults to all")
     parser_shell = subparsers.add_parser("shell", help="build the project then start a shell")
     parser_checkout = subparsers.add_parser("checkout", help="check out the project")
     parser_revision = subparsers.add_parser("revision", help="print the head git revision number")
@@ -1285,7 +1291,10 @@ def main():
         try:
             target = target_factory(args)
             options = get_command_line_options(args)
-            target.build(args.project, args.checkout, options)
+            if args.no_implicit_build:
+                globals.trees.add_built(args.project, args.checkout, target)
+            else:
+                target.build(args.project, args.checkout, options)
             target.test(args.project, args.checkout, target, args.test, options)
         finally:
             if target is not None and not args.keep:
