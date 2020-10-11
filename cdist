@@ -1075,7 +1075,7 @@ def main():
         "doxygen": "build the project's Doxygen documentation",
         "latest": "print out the latest version",
         "test": "build the project and run its unit tests",
-        "shell": "build the project then start a shell",
+        "shell": "start a shell in the project''s work directory",
         "checkout": "check out the project",
         "revision": "print the head git revision number",
         "dependencies" : "print details of the project's dependencies as a .dot file"
