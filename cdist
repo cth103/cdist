@@ -722,7 +722,7 @@ def notarize(dmg, bundle_id):
 
     for i in range(0, 30):
         print('Checking up on %s' % request_uuid)
-        p = subprocess.run(['xcrun', 'altool', '--notarization-info', request_uuid, '-u', apple_id, '-p', apple_password, '--output-format', 'xml'], capture_output=True)
+        p = subprocess.run(['xcrun', 'altool', '--notarization-info', request_uuid, '-u', config.get('apple_id'), '-p', config.get('apple_password'), '--output-format', 'xml'], capture_output=True)
         status = string_after(p, 'Status')
         print('Got %s' % status)
         if status == 'invalid':
@@ -792,8 +792,8 @@ class OSXSingleTarget(OSXTarget):
         for x in p:
             if not isinstance(x, tuple):
                 raise Error('macOS packages must be returned from cscript as tuples of (dmg-filename, bundle-id)')
-        if not no_notarize:
-            notarize(x[0], x[1])
+            if not no_notarize:
+                notarize(x[0], x[1])
         self._copy_packages(tree, [x[0] for x in p], output_dir)
 
 
