@@ -26,6 +26,7 @@ import glob
 import inspect
 import multiprocessing
 import os
+import platform
 import re
 import shlex
 import shutil
@@ -580,7 +581,7 @@ class FlatpakTarget(Target):
         return b
 
 
-class WindowsTarget(DockerTarget):
+class WindowsDockerTarget(DockerTarget):
     """
     This target exposes the following additional API:
 
@@ -591,7 +592,7 @@ class WindowsTarget(DockerTarget):
     tool_path: path to 32- and 64-bit tools
     """
     def __init__(self, windows_version, bits, directory, environment_version):
-        super(WindowsTarget, self).__init__('windows', directory)
+        super(WindowsDockerTarget, self).__init__('windows', directory)
         self.version = windows_version
         self.bits = bits
 
@@ -652,6 +653,28 @@ class WindowsTarget(DockerTarget):
     def mingw_name(self):
         log_normal('Deprecated property mingw_name: use name')
         return self.name
+
+
+class WindowsNativeTarget(Target):
+    """
+    This target exposes the following additional API:
+
+    version: Windows version ('xp' or None)
+    bits: bitness of Windows (32 or 64)
+    name: name of our target e.g. x86_64-w64-mingw32.shared
+    environment_prefix: path to Windows environment for the appropriate target (libraries and some tools)
+    """
+    def __init__(self, directory):
+        super().__init__('windows', directory)
+        self.version = None
+        self.bits = 64
+
+        self.environment_prefix = config.get('windows_native_environmnet_prefix')
+
+        self.set('PATH', '%s/bin:%s' % (self.environment_prefix, os.environ['PATH']))
+
+    def command(self, cmd):
+        command(cmd)
 
 
 class LinuxTarget(DockerTarget):
@@ -858,12 +881,15 @@ def target_factory(args):
     target = None
     if s.startswith('windows-'):
         x = s.split('-')
-        if len(x) == 2:
-            target = WindowsTarget(None, int(x[1]), args.work, args.environment_version)
-        elif len(x) == 3:
-            target = WindowsTarget(x[1], int(x[2]), args.work, args.environment_version)
+        if platform.system() == "Windows":
+            target = WindowsNativeTarget(args.work)
         else:
-            raise Error("Bad Windows target name `%s'")
+            if len(x) == 2:
+                target = WindowsDockerTarget(None, int(x[1]), args.work, args.environment_version)
+            elif len(x) == 3:
+                target = WindowsDockerTarget(x[1], int(x[2]), args.work, args.environment_version)
+            else:
+                raise Error("Bad Windows target name `%s'")
     elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-') or s.startswith('fedora-') or s.startswith('mageia-'):
         p = s.split('-')
         if len(p) != 3:
@@ -982,8 +1008,13 @@ class Tree(object):
                 try:
                     self.version = Version(v)
                 except:
-                    tag = command_and_read('git -C %s describe --tags' % proj)[0][1:]
-                    self.version = Version.from_git_tag(tag)
+                    try:
+                        tag = command_and_read('git -C %s describe --tags' % proj)[0][1:]
+                        self.version = Version.from_git_tag(tag)
+                    except:
+                        # We'll leave version as None if we can't read it; maybe this is a bad idea
+                        # Should probably just install git on the Windows VM
+                        pass
 
         os.chdir(cwd)
 
