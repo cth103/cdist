@@ -1151,8 +1151,8 @@ def main():
     parser_manual = subparsers.add_parser("manual", help="build the project's manual")
     parser_doxygen = subparsers.add_parser("doxygen", help="build the project's Doxygen documentation")
     parser_latest = subparsers.add_parser("latest", help="print out the latest version")
-    parser_latest.add_argument('--latest-major', help='major version to return', type=int)
-    parser_latest.add_argument('--latest-minor', help='minor version to return', type=int)
+    parser_latest.add_argument('--major', help='major version to return', type=int)
+    parser_latest.add_argument('--minor', help='minor version to return', type=int)
     parser_test = subparsers.add_parser("test", help="build the project and run its unit tests")
     parser_test.add_argument('--no-implicit-build', help='do not build first', action='store_true')
     parser_test.add_argument('--test', help="name of test to run, defaults to all")
@@ -1308,7 +1308,7 @@ def main():
                             t = s[1]
                         if len(t) > 0 and t[0] == 'v':
                             v = Version(t[1:])
-                            if (args.latest_major is None or v.major == args.latest_major) and (args.latest_minor is None or v.minor == args.latest_minor):
+                            if (args.major is None or v.major == args.major) and (args.minor is None or v.minor == args.minor):
                                 latest = v
 
         print(latest)
