@@ -734,14 +734,13 @@ def notarize(dmg, bundle_id):
 
     def string_after(process, key):
         lines = p.stdout.decode('utf-8').splitlines()
-        request_uuid = None
         for i in range(0, len(lines)):
             if lines[i].find(key) != -1:
                 return lines[i+1].strip().replace('<string>', '').replace('</string>', '')
 
-        raise Error("Missing expected response %s from Apple" % key)
-
     request_uuid = string_after(p, "RequestUUID")
+    if request_uuid is None:
+        raise Error('No RequestUUID found in response from Apple')
 
     for i in range(0, 30):
         print('Checking up on %s' % request_uuid)
