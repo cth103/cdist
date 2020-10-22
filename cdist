@@ -855,7 +855,7 @@ class SourceTarget(Target):
     def cleanup(self):
         rmtree(self.directory)
 
-    def package(self, project, checkout, output_dir, options):
+    def package(self, project, checkout, output_dir, options, no_notarize):
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
             name = read_wscript_variable(os.getcwd(), 'APPNAME')
