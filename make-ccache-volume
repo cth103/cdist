@@ -5,7 +5,7 @@ docker volume create ccache
 volume_id=$(docker run --mount source=ccache,target=/ccache -itd ubuntu-18.04-64 bash)
 for user in jenkins $USER; do
   id=$(id -u $user)
-  for t in ubuntu-18.04-64 ubuntu-20.04-64 windows windows_2.15.x; do
+  for t in ubuntu-18.04-64 ubuntu-20.04-64 ubuntu-20.10-64 windows windows_2.15.x; do
     docker exec $volume_id mkdir /ccache/$t-$id
     docker exec $volume_id chmod 777 /ccache/$t-$id
   done
