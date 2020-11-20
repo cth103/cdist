@@ -256,9 +256,12 @@ def rmtree(a):
 
 def command(c):
     log_normal(c)
-    r = os.system(c)
-    if (r >> 8):
-        raise Error('command %s failed' % c)
+    try:
+        r = subprocess.run(shlex.split(c))
+        if r.returncode != 0:
+            raise Error(f'command {c} failed ({r.returncode})')
+    except Exception as e:
+        raise Error(f'command {c} failed ({e})')
 
 def command_and_read(c):
     log_normal(c)
