@@ -256,8 +256,9 @@ def rmtree(a):
 
 def command(c):
     log_normal(c)
+    posix = sys.platform != 'win32'
     try:
-        r = subprocess.run(shlex.split(c), shell=True)
+        r = subprocess.run(shlex.split(c, posix=posix), shell=True)
         if r.returncode != 0:
             raise Error(f'command {c} failed ({r.returncode})')
     except Exception as e:
