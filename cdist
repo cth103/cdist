@@ -259,9 +259,9 @@ def command(c):
     try:
         r = subprocess.run(c, shell=True)
         if r.returncode != 0:
-            raise Error(f'command {c} failed ({r.returncode})')
+            raise Error('command %s failed (%d)' % (c, r.returncode))
     except Exception as e:
-        raise Error(f'command {c} failed ({e})')
+        raise Error('command %s failed (%d)' % (c, e))
 
 def command_and_read(c):
     log_normal(c)
