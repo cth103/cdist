@@ -755,6 +755,9 @@ def notarize(dmg, bundle_id):
         elif status == 'success':
             subprocess.run(['xcrun', 'stapler', 'staple', dmg])
             return
+        else:
+            print("Could not understand xcrun response")
+            print(p)
         time.sleep(30)
 
     raise Error("Notarization timed out")
