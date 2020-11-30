@@ -261,7 +261,7 @@ def command(c):
         if r.returncode != 0:
             raise Error('command %s failed (%d)' % (c, r.returncode))
     except Exception as e:
-        raise Error('command %s failed (%d)' % (c, e))
+        raise Error('command %s failed (%s)' % (c, e))
 
 def command_and_read(c):
     log_normal(c)
