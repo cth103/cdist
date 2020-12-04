@@ -755,7 +755,7 @@ def notarize(dmg, bundle_id):
         elif status == 'success':
             subprocess.run(['xcrun', 'stapler', 'staple', dmg])
             return
-        else:
+        elif status != "in progress":
             print("Could not understand xcrun response")
             print(p)
         time.sleep(30)
