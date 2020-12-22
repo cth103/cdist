@@ -765,7 +765,6 @@ def notarize(dmg, bundle_id):
 class OSXTarget(Target):
     def __init__(self, directory=None):
         super(OSXTarget, self).__init__('osx', directory)
-        self.sdk = config.get('osx_sdk')
         self.sdk_prefix = config.get('osx_sdk_prefix')
         self.environment_prefix = config.get('osx_environment_prefix')
         self.apple_id = config.get('apple_id')
@@ -782,27 +781,24 @@ class OSXTarget(Target):
 
 
 class OSXSingleTarget(OSXTarget):
-    def __init__(self, bits, directory=None):
+    def __init__(self, arch, sdk, directory=None):
         super(OSXSingleTarget, self).__init__(directory)
-        self.bits = bits
+        self.arch = arch
+        self.sdk = sdk
 
-        if bits == 32:
-            arch = 'i386'
-        else:
-            arch = 'x86_64'
-
-        flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (self.sdk_prefix, self.sdk, arch)
-        enviro = '%s/%d' % (config.get('osx_environment_prefix'), bits)
+        flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (self.sdk_prefix, sdk, arch)
+        host_enviro = '%s/x86_64' % config.get('osx_environment_prefix')
+        target_enviro = '%s/%s' % (config.get('osx_environment_prefix'), arch)
 
         # Environment variables
-        self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, enviro, flags))
+        self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, target_enviro, flags))
         self.set('CPPFLAGS', '')
-        self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, enviro, flags))
-        self.set('LDFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, enviro, flags))
-        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, enviro, flags))
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig:/usr/lib/pkgconfig' % (self.directory, enviro))
-        self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % enviro)
-        self.set('MACOSX_DEPLOYMENT_TARGET', config.get('osx_sdk'))
+        self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, target_enviro, flags))
+        self.set('LDFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, target_enviro, flags))
+        self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, target_enviro, flags))
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig:/usr/lib/pkgconfig' % (self.directory, target_enviro))
+        self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % host_enviro)
+        self.set('MACOSX_DEPLOYMENT_TARGET', sdk)
         self.set('CCACHE_BASEDIR', self.directory)
 
     @Target.ccache.setter
@@ -825,14 +821,19 @@ class OSXSingleTarget(OSXTarget):
 
 
 class OSXUniversalTarget(OSXTarget):
-    def __init__(self, directory=None):
+    def __init__(self, archs, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
-        self.bits = None
+        self.archs = archs
 
     def package(self, project, checkout, output_dir, options, no_notarize):
 
-        for b in [32, 64]:
-            target = OSXSingleTarget(b, os.path.join(self.directory, '%d' % b))
+        sdk = config.get('osx_sdk')
+        for a in self.archs:
+            if a.find('arm') != -1:
+                sdk = '11.0'
+
+        for a in self.archs:
+            target = OSXSingleTarget(a, sdk, os.path.join(self.directory, a))
             target.ccache = self.ccache
             tree = globals.trees.get(project, checkout, target)
             tree.build_dependencies(options)
@@ -875,7 +876,7 @@ class SourceTarget(Target):
 #    or centos-version-{32,64}
 #    or fedora-version-{32,64}
 #    or mageia-version-{32,64}
-#    or osx-{32,64}
+#    or osx-{intel,arm}
 #    or source
 #    or flatpak
 #    or appimage
@@ -906,13 +907,15 @@ def target_factory(args):
         target = LinuxTarget(p[0], None, int(p[1]), args.work)
     elif s == 'raspbian':
         target = LinuxTarget(s, None, None, args.work)
-    elif s.startswith('osx-'):
-        target = OSXSingleTarget(int(s.split('-')[1]), args.work)
-    elif s == 'osx':
+    elif s == 'osx-intel':
+        # Universal Intel 32/64-bit
         if args.command == 'build':
-            target = OSXSingleTarget(64, args.work)
+            target = OSXSingleTarget('x86_64', args.work)
         else:
-            target = OSXUniversalTarget(args.work)
+            target = OSXUniversalTarget(('i386', 'x86_64'), args.work)
+    elif s == 'osx-arm':
+        # Universal arm64 and Intel 64-bit
+        target = OSXUniversalTarget(('arm64', 'x86_64'), args.work)
     elif s == 'source':
         target = SourceTarget()
     elif s == 'flatpak':
