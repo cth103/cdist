@@ -909,15 +909,17 @@ def target_factory(args):
         target = LinuxTarget(p[0], None, int(p[1]), args.work)
     elif s == 'raspbian':
         target = LinuxTarget(s, None, None, args.work)
-    elif s == 'osx-intel':
-        # Universal Intel 32/64-bit
+    elif s == 'osx-intel-32-64':
+        # Universal Intel 32/64-bit built for config's os_sdk
         if args.command == 'build':
             target = OSXSingleTarget('x86_64', args.work)
         else:
             target = OSXUniversalTarget(('i386', 'x86_64'), args.work)
-    elif s == 'osx-arm':
-        # Universal arm64 and Intel 64-bit
+    elif s == 'osx-arm-intel-64':
+        # Universal arm64 and Intel 64-bit built for SDK 11.0
         target = OSXUniversalTarget(('arm64', 'x86_64'), args.work)
+    elif s == 'osx-arm64':
+        target = OSXSingleTarget('arm64', '11.0', args.work)
     elif s == 'source':
         target = SourceTarget()
     elif s == 'flatpak':
