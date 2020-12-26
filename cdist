@@ -790,6 +790,8 @@ class OSXSingleTarget(OSXTarget):
         host_enviro = '%s/x86_64' % config.get('osx_environment_prefix')
         target_enviro = '%s/%s' % (config.get('osx_environment_prefix'), arch)
 
+        self.bin = '%s/bin' % target_enviro
+
         # Environment variables
         self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, target_enviro, flags))
         self.set('CPPFLAGS', '')
