@@ -775,9 +775,8 @@ class OSXTarget(Target):
     def command(self, c):
         command('%s %s' % (self.variables_string(False), c))
 
-    def build(self, *a, **k):
+    def unlock_keychain(self):
         self.command('security unlock-keychain -p %s %s' % (self.osx_keychain_password, self.osx_keychain_file))
-        return super().build(*a, **k)
 
 
 class OSXSingleTarget(OSXTarget):
@@ -813,6 +812,7 @@ class OSXSingleTarget(OSXTarget):
     def package(self, project, checkout, output_dir, options, no_notarize):
         tree = self.build(project, checkout, options)
         tree.add_defaults(options)
+        self.unlock_keychain()
         p = self._build_packages(tree, options)
         for x in p:
             if not isinstance(x, tuple):
@@ -841,6 +841,7 @@ class OSXUniversalTarget(OSXTarget):
             tree.build_dependencies(options)
             tree.build(options)
 
+        self.unlock_keychain()
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
             if len(inspect.getfullargspec(tree.cscript['package']).args) == 3:
