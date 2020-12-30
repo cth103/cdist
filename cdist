@@ -728,7 +728,7 @@ class AppImageTarget(LinuxTarget):
         self.privileged = True
 
 
-def notarize(dmg, bundle_id):
+def notarize_dmg(dmg, bundle_id):
     p = subprocess.run(
         ['xcrun', 'altool', '--notarize-app', '-t', 'osx', '-f', dmg, '--primary-bundle-id', bundle_id, '-u', config.get('apple_id'), '-p', config.get('apple_password'), '--output-format', 'xml'],
         capture_output=True
@@ -818,7 +818,7 @@ class OSXSingleTarget(OSXTarget):
             if not isinstance(x, tuple):
                 raise Error('macOS packages must be returned from cscript as tuples of (dmg-filename, bundle-id)')
             if not no_notarize:
-                notarize(x[0], x[1])
+                notarize_dmg(x[0], x[1])
         self._copy_packages(tree, [x[0] for x in p], output_dir)
 
 
