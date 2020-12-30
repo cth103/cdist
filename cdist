@@ -425,7 +425,7 @@ class Target(object):
     def setup(self):
         pass
 
-    def _build_packages(self, tree, options):
+    def _build_packages(self, tree, options, notarize):
         if len(inspect.getfullargspec(tree.cscript['package']).args) == 3:
             packages = tree.call('package', tree.version, options)
         else:
@@ -441,7 +441,7 @@ class Target(object):
     def package(self, project, checkout, output_dir, options, notarize):
         tree = self.build(project, checkout, options)
         tree.add_defaults(options)
-        p = self._build_packages(tree, options)
+        p = self._build_packages(tree, options, notarize)
         self._copy_packages(tree, p, output_dir)
 
     def build(self, project, checkout, options):
@@ -778,6 +778,15 @@ class OSXTarget(Target):
     def unlock_keychain(self):
         self.command('security unlock-keychain -p %s %s' % (self.osx_keychain_password, self.osx_keychain_file))
 
+    def _build_packages(self, tree, options, notarize):
+        p = super()._build_packages(tree, options, notarize)
+        for x in p:
+            if not isinstance(x, tuple):
+                raise Error('macOS packages must be returned from cscript as tuples of (dmg-filename, bundle-id)')
+            if notarize:
+                notarize_dmg(x[0], x[1])
+        return p
+
 
 class OSXSingleTarget(OSXTarget):
     def __init__(self, arch, sdk, directory=None):
@@ -813,12 +822,7 @@ class OSXSingleTarget(OSXTarget):
         tree = self.build(project, checkout, options)
         tree.add_defaults(options)
         self.unlock_keychain()
-        p = self._build_packages(tree, options)
-        for x in p:
-            if not isinstance(x, tuple):
-                raise Error('macOS packages must be returned from cscript as tuples of (dmg-filename, bundle-id)')
-            if notarize:
-                notarize_dmg(x[0], x[1])
+        p = self._build_packages(tree, options, notarize)
         self._copy_packages(tree, [x[0] for x in p], output_dir)
 
 
@@ -844,8 +848,7 @@ class OSXUniversalTarget(OSXTarget):
         self.unlock_keychain()
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
-            self._build_packages(tree, options)
-            for p in packages:
+            for p in self._build_packages(tree, options, notarize):
                 copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
 
 class SourceTarget(Target):
