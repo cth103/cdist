@@ -837,16 +837,14 @@ class OSXUniversalTarget(OSXTarget):
     def __init__(self, archs, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
         self.archs = archs
-
-    def package(self, project, checkout, output_dir, options, notarize):
-
-        sdk = config.get('osx_sdk')
+        self.sdk = config.get('osx_sdk')
         for a in self.archs:
             if a.find('arm') != -1:
-                sdk = '11.0'
+                self.sdk = '11.0'
 
+    def package(self, project, checkout, output_dir, options, notarize):
         for a in self.archs:
-            target = OSXSingleTarget(a, sdk, os.path.join(self.directory, a))
+            target = OSXSingleTarget(a, self.sdk, os.path.join(self.directory, a))
             target.ccache = self.ccache
             tree = globals.trees.get(project, checkout, target)
             tree.build_dependencies(options)
