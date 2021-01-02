@@ -914,13 +914,10 @@ def target_factory(args):
         target = LinuxTarget(p[0], None, int(p[1]), args.work)
     elif s == 'raspbian':
         target = LinuxTarget(s, None, None, args.work)
-    elif s == 'osx-intel-32-64':
-        # Universal Intel 32/64-bit built for config's os_sdk
-        if args.command == 'build':
-            target = OSXSingleTarget('x86_64', args.work)
-        else:
-            target = OSXUniversalTarget(('i386', 'x86_64'), args.work)
-    elif s == 'osx-arm-intel-64':
+    elif s == 'osx-intel':
+        # Intel 64-bit built for config's os_sdk
+        target = OSXSingleTarget('x86_64', config.get('osx_sdk'), args.work)
+    elif s == 'osx-arm-intel':
         # Universal arm64 and Intel 64-bit built for SDK 11.0
         target = OSXUniversalTarget(('arm64', 'x86_64'), args.work)
     elif s == 'osx-arm64':
