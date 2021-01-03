@@ -883,7 +883,7 @@ class SourceTarget(Target):
 #    or centos-version-{32,64}
 #    or fedora-version-{32,64}
 #    or mageia-version-{32,64}
-#    or osx-{intel,arm}
+#    or osx-{intel,arm-intel,arm64}
 #    or source
 #    or flatpak
 #    or appimage
