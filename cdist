@@ -804,8 +804,8 @@ class OSXSingleTarget(OSXTarget):
         self.sdk = sdk
 
         flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (self.sdk_prefix, sdk, arch)
-        host_enviro = '%s/x86_64/10.9' % config.get('osx_environment_prefix')
-        target_enviro = '%s/%s/%s' % (config.get('osx_environment_prefix'), arch, sdk)
+        host_enviro = '%s/x86_64' % config.get('osx_environment_prefix')
+        target_enviro = '%s/%s' % (config.get('osx_environment_prefix'), arch)
 
         self.bin = '%s/bin' % target_enviro
 
