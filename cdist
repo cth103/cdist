@@ -747,6 +747,7 @@ def notarize_dmg(dmg, bundle_id):
 
     request_uuid = string_after(p, "RequestUUID")
     if request_uuid is None:
+        print("Response: %s" % p)
         raise Error('No RequestUUID found in response from Apple')
 
     for i in range(0, 30):
