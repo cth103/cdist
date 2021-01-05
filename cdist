@@ -837,9 +837,11 @@ class OSXSingleTarget(OSXTarget):
 class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
+        self.intel_sdk = config.get('osx_intel_sdk')
+        self.arm_sdk = config.get('osx_arm_sdk')
 
     def package(self, project, checkout, output_dir, options, notarize):
-        for arch, sdk in (('x86_64', config.get('osx_intel_sdk')), ('arm64', config.get('osx_arm_sdk'))):
+        for arch, sdk in (('x86_64', self.intel_sdk), ('arm64', self.arm_sdk)):
             target = OSXSingleTarget(arch, sdk, os.path.join(self.directory, arch))
             target.ccache = self.ccache
             tree = globals.trees.get(project, checkout, target)
