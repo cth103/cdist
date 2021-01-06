@@ -111,8 +111,9 @@ class Config:
                          Option('git_reference'),
                          Option('osx_environment_prefix'),
                          Option('osx_sdk_prefix'),
-                         Option('osx_intel_sdk'),
-                         Option('osx_arm_sdk'),
+                         Option('osx_sdk'),
+                         Option('osx_intel_deployment'),
+                         Option('osx_arm_deployment'),
                          Option('osx_keychain_file'),
                          Option('osx_keychain_password'),
                          Option('apple_id'),
@@ -798,10 +799,11 @@ class OSXTarget(Target):
 
 
 class OSXSingleTarget(OSXTarget):
-    def __init__(self, arch, sdk, directory=None):
+    def __init__(self, arch, sdk, deployment, directory=None):
         super(OSXSingleTarget, self).__init__(directory)
         self.arch = arch
         self.sdk = sdk
+        self.deployment = deployment
 
         flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (self.sdk_prefix, sdk, arch)
         host_enviro = '%s/x86_64' % config.get('osx_environment_prefix')
@@ -817,7 +819,7 @@ class OSXSingleTarget(OSXTarget):
         self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, target_enviro, flags))
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig:/usr/lib/pkgconfig' % (self.directory, target_enviro))
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % host_enviro)
-        self.set('MACOSX_DEPLOYMENT_TARGET', sdk)
+        self.set('MACOSX_DEPLOYMENT_TARGET', self.deployment)
         self.set('CCACHE_BASEDIR', self.directory)
 
     @Target.ccache.setter
@@ -838,12 +840,11 @@ class OSXSingleTarget(OSXTarget):
 class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
-        self.intel_sdk = config.get('osx_intel_sdk')
-        self.arm_sdk = config.get('osx_arm_sdk')
+        self.sdk = config.get('osx_sdk')
 
     def package(self, project, checkout, output_dir, options, notarize):
-        for arch, sdk in (('x86_64', self.intel_sdk), ('arm64', self.arm_sdk)):
-            target = OSXSingleTarget(arch, sdk, os.path.join(self.directory, arch))
+        for arch, deployment in (('x86_64', config.get('osx_intel_deployment')), ('arm64', config.get('osx_arm_deployment'))):
+            target = OSXSingleTarget(arch, self.sdk, deployment, os.path.join(self.directory, arch))
             target.ccache = self.ccache
             tree = globals.trees.get(project, checkout, target)
             tree.build_dependencies(options)
