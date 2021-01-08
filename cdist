@@ -916,6 +916,8 @@ def target_factory(args):
         target = LinuxTarget(s, None, None, args.work)
     elif s == 'osx':
         target = OSXUniversalTarget(args.work)
+    elif s == 'osx-intel':
+        target = OSXSingleTarget('x86_64', config.get('osx_sdk'), config.get('osx_intel_deployment'), args.work)
     elif s == 'source':
         target = SourceTarget()
     elif s == 'flatpak':
