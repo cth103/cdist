@@ -754,9 +754,8 @@ def notarize_dmg(dmg, bundle_id):
     for i in range(0, 30):
         print('%s: checking up on %s' % (datetime.datetime.now(), request_uuid))
         p = subprocess.run(['xcrun', 'altool', '--notarization-info', request_uuid, '-u', config.get('apple_id'), '-p', config.get('apple_password'), '--output-format', 'xml'], capture_output=True)
-        print('%s: %s' % (datetime.datetime.now(), p))
         status = string_after(p, 'Status')
-        print('Got status: %s' % status)
+        print('%s: got status %s' % (datetime.datetime.now(), status))
         if status == 'invalid':
             raise Error("Notarization failed")
         elif status == 'success':
