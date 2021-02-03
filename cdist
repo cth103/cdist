@@ -752,10 +752,11 @@ def notarize_dmg(dmg, bundle_id):
         raise Error('No RequestUUID found in response from Apple')
 
     for i in range(0, 30):
-        print('Checking up on %s' % request_uuid)
+        print('%s: checking up on %s' % (datetime.datetime.now(), request_uuid))
         p = subprocess.run(['xcrun', 'altool', '--notarization-info', request_uuid, '-u', config.get('apple_id'), '-p', config.get('apple_password'), '--output-format', 'xml'], capture_output=True)
+        print('%s: %s' % (datetime.datetime.now(), p))
         status = string_after(p, 'Status')
-        print('Got %s' % status)
+        print('Got status: %s' % status)
         if status == 'invalid':
             raise Error("Notarization failed")
         elif status == 'success':
