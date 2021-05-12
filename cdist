@@ -26,6 +26,7 @@ import glob
 import inspect
 import multiprocessing
 import os
+from pathlib import Path
 import platform
 import re
 import shlex
@@ -795,6 +796,9 @@ class OSXTarget(Target):
                 raise Error('macOS packages must be returned from cscript as tuples of (dmg-filename, bundle-id)')
             if notarize:
                 notarize_dmg(x[0], x[1])
+            else:
+                with f as f.open(dmg + '.id', 'w'):
+                    print(out=f, x[1])
         return [x[0] for x in p]
 
 
@@ -1169,6 +1173,8 @@ def main():
     parser_checkout = subparsers.add_parser("checkout", help="check out the project")
     parser_revision = subparsers.add_parser("revision", help="print the head git revision number")
     parser_dependencies = subparsers.add_parser("dependencies", help="print details of the project's dependencies as a .dot file")
+    parser_notarize = subparsers.add_parser("notarize", help="notarize .dmgs in a directory using *.dmg.id files")
+    parser_notarize.add_argument('--dmgs', help='directory containing *.dmg and *.dmg.id')
 
     global args
     args = parser.parse_args()
@@ -1379,6 +1385,20 @@ def main():
             print("%s -> %s;" % (d[2].name.replace("-", "-"), d[0].name.replace("-", "_")))
         print("}")
 
+    elif args.command == 'notarize':
+        if args.dmgs is None:
+            raise Error('you must specify ---dmgs')
+        if args.no_notarize:
+            raise Error('it makes no sense to pass --no-notarize with the notarize command')
+
+        for dmg in Path(args.dmgs).iter():
+            id = None
+            try:
+                with open(dmg + '.id') as f:
+                    id = f.getline().strip()
+            catch OSError:
+                raise Error('could not find ID file for %s' % dmg)
+            notarize_dmg(dmg, id)
 
 try:
     main()
