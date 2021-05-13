@@ -797,8 +797,8 @@ class OSXTarget(Target):
             if notarize:
                 notarize_dmg(x[0], x[1])
             else:
-                with f as f.open(dmg + '.id', 'w'):
-                    print(out=f, x[1])
+                with open(dmg + '.id', 'w') as f:
+                    print(x[1], out=f)
         return [x[0] for x in p]
 
 
@@ -1205,7 +1205,7 @@ def main():
         if not os.path.exists(args.work):
             os.makedirs(args.work)
 
-    if args.project is None and args.command != 'shell':
+    if args.project is None and not args.command in ['shell', 'notarize']:
         raise Error('you must specify -p or --project')
 
     globals.quiet = args.quiet
@@ -1388,15 +1388,13 @@ def main():
     elif args.command == 'notarize':
         if args.dmgs is None:
             raise Error('you must specify ---dmgs')
-        if args.no_notarize:
-            raise Error('it makes no sense to pass --no-notarize with the notarize command')
 
-        for dmg in Path(args.dmgs).iter():
+        for dmg in Path(args.dmgs).glob('*.dmg'):
             id = None
             try:
-                with open(dmg + '.id') as f:
-                    id = f.getline().strip()
-            catch OSError:
+                with open(str(dmg) + '.id') as f:
+                    id = f.readline().strip()
+            except OSError:
                 raise Error('could not find ID file for %s' % dmg)
             notarize_dmg(dmg, id)
 
