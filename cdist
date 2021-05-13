@@ -750,7 +750,7 @@ def notarize_dmg(dmg, bundle_id):
     request_uuid = string_after(p, "RequestUUID")
     if request_uuid is None:
         print("Looking for upload ID")
-        message = string_after("message")
+        message = string_after(p, "message")
         print("Looking in %s" % message)
         if message:
             m = re.match('.*The upload ID is ([0-9a-f\-]*)', message)
