@@ -115,6 +115,7 @@ class Config:
                          Option('osx_sdk'),
                          Option('osx_intel_deployment'),
                          Option('osx_arm_deployment'),
+                         Option('osx_old_deployment'),
                          Option('osx_keychain_file'),
                          Option('osx_keychain_password'),
                          Option('apple_id'),
@@ -805,29 +806,34 @@ class OSXTarget(Target):
             if notarize:
                 notarize_dmg(x[0], x[1])
             else:
-                with open(dmg + '.id', 'w') as f:
-                    print(x[1], out=f)
+                with open(x[0] + '.id', 'w') as f:
+                    print(x[1], file=f)
         return [x[0] for x in p]
 
 
 class OSXSingleTarget(OSXTarget):
-    def __init__(self, arch, sdk, deployment, directory=None):
+    def __init__(self, arch, sdk, deployment, directory=None, can_notarize=True):
         super(OSXSingleTarget, self).__init__(directory)
         self.arch = arch
         self.sdk = sdk
         self.deployment = deployment
+        self.can_notarize = can_notarize
+        self.sub_targets = [self]
 
         flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (self.sdk_prefix, sdk, arch)
-        host_enviro = '%s/x86_64' % config.get('osx_environment_prefix')
-        target_enviro = '%s/%s' % (config.get('osx_environment_prefix'), arch)
+        if arch == 'x86_64':
+            host_enviro = '%s/x86_64/%s' % (config.get('osx_environment_prefix'), deployment)
+        else:
+            host_enviro = '%s/x86_64/10.10' % config.get('osx_environment_prefix')
+        target_enviro = '%s/%s/%s' % (config.get('osx_environment_prefix'), arch, deployment)
 
         self.bin = '%s/bin' % target_enviro
 
         # Environment variables
         self.set('CFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, target_enviro, flags))
         self.set('CPPFLAGS', '')
-        self.set('CXXFLAGS', '"-I%s/include -I%s/include %s"' % (self.directory, target_enviro, flags))
-        self.set('LDFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, target_enviro, flags))
+        self.set('CXXFLAGS', '"-I%s/include -I%s/include -stdlib=libc++ %s"' % (self.directory, target_enviro, flags))
+        self.set('LDFLAGS', '"-L%s/lib -L%s/lib -stdlib=libc++ %s"' % (self.directory, target_enviro, flags))
         self.set('LINKFLAGS', '"-L%s/lib -L%s/lib %s"' % (self.directory, target_enviro, flags))
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib/pkgconfig:/usr/lib/pkgconfig' % (self.directory, target_enviro))
         self.set('PATH', '$PATH:/usr/bin:/sbin:/usr/local/bin:%s/bin' % host_enviro)
@@ -845,7 +851,7 @@ class OSXSingleTarget(OSXTarget):
         tree = self.build(project, checkout, options)
         tree.add_defaults(options)
         self.unlock_keychain()
-        p = self._cscript_package_and_notarize(tree, options, notarize)
+        p = self._cscript_package_and_notarize(tree, options, self.can_notarize and notarize)
         self._copy_packages(tree, p, output_dir)
 
 
@@ -853,11 +859,14 @@ class OSXUniversalTarget(OSXTarget):
     def __init__(self, directory=None):
         super(OSXUniversalTarget, self).__init__(directory)
         self.sdk = config.get('osx_sdk')
+        self.sub_targets = []
+        for arch, deployment in (('x86_64', config.get('osx_intel_deployment')), ('arm64', config.get('osx_arm_deployment'))):
+            target = OSXSingleTarget(arch, self.sdk, deployment, os.path.join(self.directory, arch, deployment))
+            target.ccache = self.ccache
+            self.sub_targets.append(target)
 
     def package(self, project, checkout, output_dir, options, notarize):
-        for arch, deployment in (('x86_64', config.get('osx_intel_deployment')), ('arm64', config.get('osx_arm_deployment'))):
-            target = OSXSingleTarget(arch, self.sdk, deployment, os.path.join(self.directory, arch))
-            target.ccache = self.ccache
+        for target in self.sub_targets:
             tree = globals.trees.get(project, checkout, target)
             tree.build_dependencies(options)
             tree.build(options)
@@ -930,6 +939,8 @@ def target_factory(args):
         target = OSXUniversalTarget(args.work)
     elif s == 'osx-intel':
         target = OSXSingleTarget('x86_64', config.get('osx_sdk'), config.get('osx_intel_deployment'), args.work)
+    elif s == 'osx-old':
+        target = OSXSingleTarget('x86_64', config.get('osx_sdk'), config.get('osx_old_deployment'), args.work, False)
     elif s == 'source':
         target = SourceTarget()
     elif s == 'flatpak':
