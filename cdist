@@ -840,6 +840,13 @@ class OSXSingleTarget(OSXTarget):
         self.set('MACOSX_DEPLOYMENT_TARGET', self.deployment)
         self.set('CCACHE_BASEDIR', self.directory)
 
+    def _copy_packages(self, tree, packages, output_dir):
+        for p in packages:
+            dest = os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p)))
+            copyfile(p, dest)
+            if os.path.exists(p + ".id"):
+                copyfile(p + ".id", dest + ".id")
+
     @Target.ccache.setter
     def ccache(self, v):
         Target.ccache.fset(self, v)
@@ -874,8 +881,8 @@ class OSXUniversalTarget(OSXTarget):
         self.unlock_keychain()
         tree = globals.trees.get(project, checkout, self)
         with TreeDirectory(tree):
-            for p in self._cscript_package_and_notarize(tree, options, notarize):
-                copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
+            p = self._cscript_package_and_notarize(tree, options, notarize)
+            self._copy_packages(tree, p, output_dir)
 
 class SourceTarget(Target):
     """Build a source .tar.bz2"""
