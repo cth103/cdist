@@ -1306,6 +1306,7 @@ def main():
     elif args.command == 'manual':
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
+        tree.checkout_dependencies()
 
         outs = tree.call('make_manual')
         for o in outs:
