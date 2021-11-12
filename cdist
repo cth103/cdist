@@ -1045,7 +1045,7 @@ class Tree(object):
                     self.version = Version(v)
                 except:
                     try:
-                        tag = command_and_read('git -C %s describe --tags' % proj)[0][1:]
+                        tag = command_and_read('git -C %s describe --match v* --tags' % proj)[0][1:]
                         self.version = Version.from_git_tag(tag)
                     except:
                         # We'll leave version as None if we can't read it; maybe this is a bad idea
