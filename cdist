@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-#    Copyright (C) 2012-2021 Carl Hetherington <cth@carlh.net>
+#    Copyright (C) 2012-2022 Carl Hetherington <cth@carlh.net>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -1239,10 +1239,12 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
-        target = target_factory(args)
-        target.build(args.project, args.checkout, get_command_line_options(args))
-        if not args.keep:
-            target.cleanup()
+        try:
+            target = target_factory(args)
+            target.build(args.project, args.checkout, get_command_line_options(args))
+        finally:
+            if not args.keep:
+                target.cleanup()
 
     elif args.command == 'package':
         if args.target is None:
@@ -1262,10 +1264,9 @@ def main():
 
             makedirs(output_dir)
             target.package(args.project, args.checkout, output_dir, get_command_line_options(args), not args.no_notarize)
-        except Error as e:
+        finally:
             if target is not None and not args.keep:
                 target.cleanup()
-            raise
 
         if target is not None and not args.keep:
             target.cleanup()
