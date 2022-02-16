@@ -915,7 +915,6 @@ class SourceTarget(Target):
 #    or source
 #    or flatpak
 #    or appimage
-# @param debug True to build with debugging symbols (where possible)
 def target_factory(args):
     s = args.target
     target = None
