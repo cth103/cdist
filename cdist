@@ -444,7 +444,7 @@ class Target(object):
 
     def _copy_packages(self, tree, packages, output_dir):
         for p in packages:
-            copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
+            copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, p))))
 
     def package(self, project, checkout, output_dir, options, notarize):
         tree = self.build(project, checkout, options)
@@ -797,7 +797,7 @@ class OSXTarget(Target):
 
     def _copy_packages(self, tree, packages, output_dir):
         for p in packages:
-            dest = os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p)))
+            dest = os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, p)))
             copyfile(p, dest)
             if os.path.exists(p + ".id"):
                 copyfile(p + ".id", dest + ".id")
@@ -902,7 +902,7 @@ class SourceTarget(Target):
             name = read_wscript_variable(os.getcwd(), 'APPNAME')
             command('./waf dist')
             p = os.path.abspath('%s-%s.tar.bz2' % (name, tree.version))
-            copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.git_commit, p))))
+            copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, p))))
 
 # @param s Target string:
 #       windows-{32,64}
@@ -984,7 +984,7 @@ class Tree(object):
            commit_ish -- git tag or revision to use
            target -- target object that we are using
            version -- version from the wscript (if one is present)
-           git_commit -- git revision that is actually being used
+           commit -- git revision that is actually being used
            built -- true if the tree has been built yet in this run
            required_by -- name of the tree that requires this one
     """
@@ -994,7 +994,7 @@ class Tree(object):
         self.commit_ish = commit_ish
         self.target = target
         self.version = None
-        self.git_commit = None
+        self.commit = None
         self.built = built
         self.required_by = required_by
 
@@ -1016,7 +1016,7 @@ class Tree(object):
 
             if self.commit_ish is not None:
                 command('git checkout %s %s %s' % (flags, self.commit_ish, redirect))
-            self.git_commit = command_and_read('git rev-parse --short=7 HEAD')[0].strip()
+            self.commit = command_and_read('git rev-parse --short=7 HEAD')[0].strip()
 
         self.cscript = {}
         exec(open('%s/cscript' % proj).read(), self.cscript)
