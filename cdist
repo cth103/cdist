@@ -103,7 +103,7 @@ class BoolOption(object):
 
     def offer(self, key, value):
         if key == self.key:
-            self.value = (value == 'yes' or value == '1' or value == 'true')
+            self.value = value in ['yes', '1', 'true']
 
 class Config:
     def __init__(self):
