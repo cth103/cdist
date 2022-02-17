@@ -53,25 +53,25 @@ class Trees:
     def __init__(self):
         self.trees = []
 
-    def get(self, name, specifier, target, required_by=None):
+    def get(self, name, commit_ish, target, required_by=None):
         for t in self.trees:
-            if t.name == name and t.specifier == specifier and t.target == target:
+            if t.name == name and t.commit_ish == commit_ish and t.target == target:
                 return t
-            elif t.name == name and t.specifier != specifier:
-                a = specifier if specifier is not None else "[Any]"
+            elif t.name == name and t.commit_ish != commit_ish:
+                a = commit_ish if commit_ish is not None else "[Any]"
                 if required_by is not None:
                     a += ' by %s' % required_by
-                b = t.specifier if t.specifier is not None else "[Any]"
+                b = t.commit_ish if t.commit_ish is not None else "[Any]"
                 if t.required_by is not None:
                     b += ' by %s' % t.required_by
                 raise Error('conflicting versions of %s required (%s versus %s)' % (name, a, b))
 
-        nt = Tree(name, specifier, target, required_by)
+        nt = Tree(name, commit_ish, target, required_by)
         self.trees.append(nt)
         return nt
 
-    def add_built(self, name, specifier, target):
-        self.trees.append(Tree(name, specifier, target, None, built=True))
+    def add_built(self, name, commit_ish, target):
+        self.trees.append(Tree(name, commit_ish, target, None, built=True))
 
 
 class Globals:
@@ -981,7 +981,7 @@ class Tree(object):
        possibly built.  This class is never exposed to cscripts.
        Attributes:
            name -- name of git repository (without the .git)
-           specifier -- git tag or revision to use
+           commit_ish -- git tag or revision to use
            target -- target object that we are using
            version -- version from the wscript (if one is present)
            git_commit -- git revision that is actually being used
@@ -989,9 +989,9 @@ class Tree(object):
            required_by -- name of the tree that requires this one
     """
 
-    def __init__(self, name, specifier, target, required_by, built=False):
+    def __init__(self, name, commit_ish, target, required_by, built=False):
         self.name = name
-        self.specifier = specifier
+        self.commit_ish = commit_ish
         self.target = target
         self.version = None
         self.git_commit = None
@@ -1014,8 +1014,8 @@ class Tree(object):
             command('git clone %s %s %s/%s.git %s/src/%s' % (flags, ref, config.get('git_prefix'), self.name, target.directory, self.name))
             os.chdir('%s/src/%s' % (target.directory, self.name))
 
-            if self.specifier is not None:
-                command('git checkout %s %s %s' % (flags, self.specifier, redirect))
+            if self.commit_ish is not None:
+                command('git checkout %s %s %s' % (flags, self.commit_ish, redirect))
             self.git_commit = command_and_read('git rev-parse --short=7 HEAD')[0].strip()
 
         self.cscript = {}
@@ -1113,7 +1113,7 @@ class Tree(object):
         if self.built:
             return
 
-        log_verbose("Building %s %s %s with %s" % (self.name, self.specifier, self.version, options))
+        log_verbose("Building %s %s %s with %s" % (self.name, self.commit_ish, self.version, options))
 
         variables = copy.copy(self.target.variables)
 
