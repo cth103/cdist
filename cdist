@@ -1267,9 +1267,6 @@ def main():
             if target is not None and not args.keep:
                 target.cleanup()
 
-        if target is not None and not args.keep:
-            target.cleanup()
-
     elif args.command == 'release':
         if args.minor is False and args.micro is False:
             raise Error('you must specify --minor or --micro')
