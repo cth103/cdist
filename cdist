@@ -447,10 +447,7 @@ class Target(object):
             copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, p))))
 
     def package(self, project, checkout, output_dir, options, notarize):
-        # Build the dependencies; the cscript must call its own build() method if it needs to
-        tree = globals.trees.get(project, checkout, self)
-        if self.build_dependencies:
-            tree.build_dependencies(options)
+        tree = self.build(project, checkout, options)
         tree.add_defaults(options)
         p = self._cscript_package(tree, options)
         self._copy_packages(tree, p, output_dir)
