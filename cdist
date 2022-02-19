@@ -447,16 +447,16 @@ class Target(object):
             copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, p))))
 
     def package(self, project, checkout, output_dir, options, notarize):
-        tree = self.build(project, checkout, options)
+        tree = self.build(project, checkout, options, for_package=True)
         tree.add_defaults(options)
         p = self._cscript_package(tree, options)
         self._copy_packages(tree, p, output_dir)
 
-    def build(self, project, checkout, options):
+    def build(self, project, checkout, options, for_package=False):
         tree = globals.trees.get(project, checkout, self)
         if self.build_dependencies:
             tree.build_dependencies(options)
-        tree.build(options)
+        tree.build(options, for_package=for_package)
         return tree
 
     def test(self, project, checkout, target, test, options):
@@ -855,7 +855,7 @@ class OSXSingleTarget(OSXTarget):
             self.set('CXX', '"ccache g++"')
 
     def package(self, project, checkout, output_dir, options, notarize):
-        tree = self.build(project, checkout, options)
+        tree = self.build(project, checkout, options, for_package=True)
         tree.add_defaults(options)
         self.unlock_keychain()
         p = self._cscript_package_and_notarize(tree, options, self.can_notarize and notarize)
@@ -876,7 +876,7 @@ class OSXUniversalTarget(OSXTarget):
         for target in self.sub_targets:
             tree = globals.trees.get(project, checkout, target)
             tree.build_dependencies(options)
-            tree.build(options)
+            tree.build(options, for_package=True)
 
         self.unlock_keychain()
         tree = globals.trees.get(project, checkout, self)
@@ -1109,7 +1109,7 @@ class Tree(object):
         for i in self.dependencies(options):
             i[0].build(i[1])
 
-    def build(self, options):
+    def build(self, options, for_package=False):
         if self.built:
             return
 
@@ -1121,7 +1121,10 @@ class Tree(object):
         self.add_defaults(options)
 
         if not globals.dry_run:
-            if len(inspect.getfullargspec(self.cscript['build']).args) == 2:
+            num_args = len(inspect.getfullargspec(self.cscript['build']).args)
+            if num_args == 3:
+                self.call('build', options, for_package)
+            elif num_args == 2:
                 self.call('build', options)
             else:
                 self.call('build')
