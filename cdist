@@ -1241,8 +1241,8 @@ def main():
         if args.target is None:
             raise Error('you must specify -t or --target')
 
+        target = target_factory(args)
         try:
-            target = target_factory(args)
             target.build(args.project, args.checkout, get_command_line_options(args))
         finally:
             if not args.keep:
