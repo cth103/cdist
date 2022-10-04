@@ -29,6 +29,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import signal
 import shlex
 import shutil
 import subprocess
@@ -548,6 +549,10 @@ class DockerTarget(Target):
         tag = self.image
         if config.has('docker_hub_repository'):
             tag = '%s:%s' % (config.get('docker_hub_repository'), tag)
+
+        def signal_handler(signum, frame):
+            raise Error('Killed')
+        signal.signal(signal.SIGTERM, signal_handler)
 
         self.container = command_and_read('%s run %s %s -itd %s /bin/bash' % (config.docker(), self._user_tag(), opts, tag))[0].strip()
 
