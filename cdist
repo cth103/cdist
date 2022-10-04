@@ -544,7 +544,8 @@ class DockerTarget(Target):
         if self.privileged:
             opts += '--privileged=true '
         if self.ccache:
-            opts += "-e CCACHE_DIR=/ccache/%s-%d --mount source=ccache,target=/ccache" % (self.image, os.getuid())
+            opts += "-e CCACHE_DIR=/ccache/%s-%d --mount source=ccache,target=/ccache " % (self.image, os.getuid())
+        opts += "--rm "
 
         tag = self.image
         if config.has('docker_hub_repository'):
