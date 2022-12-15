@@ -1041,7 +1041,7 @@ class Tree(object):
                         if os.path.exists(ref_path):
                             ref = '--reference %s' % ref_path
                     path = path.split(' ')[1]
-                    command('git submodule --quiet update %s %s' % (ref, path))
+                    command('git -c protocol.file.allow=always submodule --quiet update %s %s' % (ref, path))
 
         if os.path.exists('%s/wscript' % proj):
             v = read_wscript_variable(proj, "VERSION");
