@@ -1017,7 +1017,7 @@ class Tree(object):
                 ref = '--reference-if-able %s/%s.git' % (config.get('git_reference'), self.name)
             else:
                 ref = ''
-            command('git clone %s %s %s/%s.git %s/src/%s' % (flags, ref, config.get('git_prefix'), self.name, target.directory, self.name))
+            command('git -c protocol.file.allow=always clone %s %s %s/%s.git %s/src/%s' % (flags, ref, config.get('git_prefix'), self.name, target.directory, self.name))
             os.chdir('%s/src/%s' % (target.directory, self.name))
 
             if self.commit_ish is not None:
