@@ -891,7 +891,7 @@ class OSXUniversalTarget(OSXTarget):
             self._copy_packages(tree, p, output_dir)
 
 class SourceTarget(Target):
-    """Build a source .tar.bz2"""
+    """Build a source .tar.bz2 and .zst"""
     def __init__(self):
         super(SourceTarget, self).__init__('source')
 
@@ -907,8 +907,12 @@ class SourceTarget(Target):
         with TreeDirectory(tree):
             name = read_wscript_variable(os.getcwd(), 'APPNAME')
             command('./waf dist')
-            p = os.path.abspath('%s-%s.tar.bz2' % (name, tree.version))
-            copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, p))))
+            bz2 = os.path.abspath('%s-%s.tar.bz2' % (name, tree.version))
+            copyfile(bz2, os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, bz2))))
+            command('tar xjf %s' % bz2)
+            command('tar --zstd -cf %s-%s.zst %s-%s' % (name, tree.version, name, tree.version))
+            zstd = os.path.abspath('%s-%s.zst' % (name, tree.version))
+            copyfile(zstd, os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, zstd))))
 
 # @param s Target string:
 #       windows-{32,64}
