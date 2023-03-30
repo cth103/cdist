@@ -88,7 +88,7 @@ globals = Globals()
 # Configuration
 #
 
-class Option(object):
+class Option:
     def __init__(self, key, default=None):
         self.key = key
         self.value = default
@@ -97,7 +97,7 @@ class Option(object):
         if key == self.key:
             self.value = value
 
-class BoolOption(object):
+class BoolOption:
     def __init__(self, key):
         self.key = key
         self.value = False
@@ -383,7 +383,7 @@ class Version:
 # Targets
 #
 
-class Target(object):
+class Target:
     """
     Class representing the target that we are building for.  This is exposed to cscripts,
     though not all of it is guaranteed 'API'.  cscripts may expect:
@@ -986,7 +986,7 @@ def target_factory(args):
 # Tree
 #
 
-class Tree(object):
+class Tree:
     """Description of a tree, which is a checkout of a project,
        possibly built.  This class is never exposed to cscripts.
        Attributes:
