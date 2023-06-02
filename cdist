@@ -1148,28 +1148,6 @@ class Tree:
 #
 
 def main():
-
-    commands = {
-        "build": "build project",
-        "package": "build and package the project",
-        "release": "release a project using its next version number (adding a tag)",
-        "pot": "build the project's .pot files",
-        "manual": "build the project's manual",
-        "doxygen": "build the project's Doxygen documentation",
-        "latest": "print out the latest version",
-        "test": "build the project and run its unit tests",
-        "shell": "start a shell in the project''s work directory",
-        "checkout": "check out the project",
-        "revision": "print the head git revision number",
-        "dependencies" : "print details of the project's dependencies as a .dot file"
-    }
-
-    one_of = ""
-    summary = ""
-    for k, v in commands.items():
-        one_of += "\t%s%s\n" % (k.ljust(20), v)
-        summary += k + " "
-
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--project', help='project name')
     parser.add_argument('-c', '--checkout', help='string to pass to git for checkout')
@@ -1204,7 +1182,7 @@ def main():
     parser_test = subparsers.add_parser("test", help="build the project and run its unit tests")
     parser_test.add_argument('--no-implicit-build', help='do not build first', action='store_true')
     parser_test.add_argument('--test', help="name of test to run, defaults to all")
-    parser_shell = subparsers.add_parser("shell", help="build the project then start a shell")
+    parser_shell = subparsers.add_parser("shell", help="start a shell in the project's work directory")
     parser_checkout = subparsers.add_parser("checkout", help="check out the project")
     parser_revision = subparsers.add_parser("revision", help="print the head git revision number")
     parser_dependencies = subparsers.add_parser("dependencies", help="print details of the project's dependencies as a .dot file")
