@@ -121,12 +121,14 @@ class Config:
                          Option('osx_keychain_password'),
                          Option('apple_id'),
                          Option('apple_password'),
+                         Option('apple_team_id'),
                          BoolOption('docker_sudo'),
                          BoolOption('docker_no_user'),
                          Option('docker_hub_repository'),
                          Option('flatpak_state_dir'),
                          Option('parallel', multiprocessing.cpu_count()),
-                         Option('temp', '/var/tmp')]
+                         Option('temp', '/var/tmp'),
+                         Option('osx_notarytool', ['xcrun', 'notarytool'])]
 
         config_dir = '%s/.config' % os.path.expanduser('~')
         if not os.path.exists(config_dir):
@@ -153,6 +155,10 @@ class Config:
             if len(s) == 2:
                 for k in self.options:
                     k.offer(s[0], s[1])
+
+        if not isinstance(self.get('osx_notarytool'), list):
+            self.set('osx_notarytool', [self.get('osx_notarytool')])
+
 
     def has(self, k):
         for o in self.options:
@@ -739,47 +745,28 @@ class AppImageTarget(LinuxTarget):
         self.privileged = True
 
 
-def notarize_dmg(dmg, bundle_id):
+def notarize_dmg(dmg):
     p = subprocess.run(
-        ['xcrun', 'altool', '--notarize-app', '-t', 'osx', '-f', dmg, '--primary-bundle-id', bundle_id, '-u', config.get('apple_id'), '-p', config.get('apple_password'), '--output-format', 'xml'],
-        capture_output=True
-        )
+            config.get('osx_notarytool') + [
+            'submit',
+            '--apple-id',
+            config.get('apple_id'),
+            '--password',
+            config.get('apple_password'),
+            '--team-id',
+            config.get('apple_team_id'),
+            '--wait',
+            dmg
+        ], capture_output=True)
 
-    def string_after(process, key):
-        lines = p.stdout.decode('utf-8').splitlines()
-        for i in range(0, len(lines)):
-            if lines[i].find(key) != -1:
-                return lines[i+1].strip().replace('<string>', '').replace('</string>', '')
+    last_line = [x.strip() for x in p.stdout.decode('utf-8').splitlines() if x.strip()][-1]
+    if last_line != 'status: Accepted':
+        print("Could not understand notarytool response")
+        print(p)
+        print(f"Last line: {last_line}")
+        raise Error('Notarization failed')
 
-    request_uuid = string_after(p, "RequestUUID")
-    if request_uuid is None:
-        print("Looking for upload ID")
-        message = string_after(p, "message")
-        print("Looking in %s" % message)
-        if message:
-            m = re.match('.*The upload ID is ([0-9a-f\-]*)', message)
-            if m:
-                request_uuid = m.groups()[0]
-    if request_uuid is None:
-        print("Response: %s" % p)
-        raise Error('No RequestUUID found in response from Apple')
-
-    for i in range(0, 30):
-        print('%s: checking up on %s' % (datetime.datetime.now(), request_uuid))
-        p = subprocess.run(['xcrun', 'altool', '--notarization-info', request_uuid, '-u', config.get('apple_id'), '-p', config.get('apple_password'), '--output-format', 'xml'], capture_output=True)
-        status = string_after(p, 'Status')
-        print('%s: got status %s' % (datetime.datetime.now(), status))
-        if status == 'invalid':
-            raise Error("Notarization failed")
-        elif status == 'success':
-            subprocess.run(['xcrun', 'stapler', 'staple', dmg])
-            return
-        elif status != "in progress":
-            print("Could not understand xcrun response")
-            print(p)
-        time.sleep(30)
-
-    raise Error("Notarization timed out")
+    subprocess.run(['xcrun', 'stapler', 'staple', dmg])
 
 
 class OSXTarget(Target):
@@ -802,23 +789,21 @@ class OSXTarget(Target):
         for p in packages:
             dest = os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, p)))
             copyfile(p, dest)
-            if os.path.exists(p + ".id"):
-                copyfile(p + ".id", dest + ".id")
 
     def _cscript_package_and_notarize(self, tree, options, notarize):
         """
         Call package() in the cscript and notarize the .dmgs that are returned, if notarize == True
         """
-        p = self._cscript_package(tree, options)
-        for x in p:
-            if not isinstance(x, tuple):
-                raise Error('macOS packages must be returned from cscript as tuples of (dmg-filename, bundle-id)')
+        output = []
+        for x in self._cscript_package(tree, options):
+            # Some older cscripts give us the DMG filename and the bundle ID, even though
+            # (since using notarytool instead of altool for notarization) the bundle ID
+            # is no longer necessary.  Cope with either type of cscript.
+            dmg = x[0] if isinstance(x, tuple) else x
             if notarize:
-                notarize_dmg(x[0], x[1])
-            else:
-                with open(x[0] + '.id', 'w') as f:
-                    print(x[1], file=f)
-        return [x[0] for x in p]
+                notarize_dmg(dmg)
+            output.append(dmg)
+        return output
 
 
 class OSXSingleTarget(OSXTarget):
@@ -1183,8 +1168,8 @@ def main():
     parser_checkout = subparsers.add_parser("checkout", help="check out the project")
     parser_revision = subparsers.add_parser("revision", help="print the head git revision number")
     parser_dependencies = subparsers.add_parser("dependencies", help="print details of the project's dependencies as a .dot file")
-    parser_notarize = subparsers.add_parser("notarize", help="notarize .dmgs in a directory using *.dmg.id files")
-    parser_notarize.add_argument('--dmgs', help='directory containing *.dmg and *.dmg.id')
+    parser_notarize = subparsers.add_parser("notarize", help="notarize .dmgs in a directory")
+    parser_notarize.add_argument('--dmgs', help='directory containing *.dmg')
 
     global args
     args = parser.parse_args()
@@ -1399,13 +1384,7 @@ def main():
             raise Error('you must specify ---dmgs')
 
         for dmg in Path(args.dmgs).glob('*.dmg'):
-            id = None
-            try:
-                with open(str(dmg) + '.id') as f:
-                    id = f.readline().strip()
-            except OSError:
-                raise Error('could not find ID file for %s' % dmg)
-            notarize_dmg(dmg, id)
+            notarize_dmg(dmg)
 
 try:
     main()
