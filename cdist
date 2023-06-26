@@ -140,22 +140,19 @@ class Config:
             print('Template config file written to %s; please edit and try again.' % config_file, file=sys.stderr)
             sys.exit(1)
 
-        try:
-            f = open('%s/.config/cdist' % os.path.expanduser('~'), 'r')
-            while True:
-                l = f.readline()
-                if l == '':
-                    break
+        f = open('%s/.config/cdist' % os.path.expanduser('~'), 'r')
+        while True:
+            l = f.readline()
+            if l == '':
+                break
 
-                if len(l) > 0 and l[0] == '#':
-                    continue
+            if len(l) > 0 and l[0] == '#':
+                continue
 
-                s = l.strip().split()
-                if len(s) == 2:
-                    for k in self.options:
-                        k.offer(s[0], s[1])
-        except:
-            raise
+            s = l.strip().split()
+            if len(s) == 2:
+                for k in self.options:
+                    k.offer(s[0], s[1])
 
     def has(self, k):
         for o in self.options:
