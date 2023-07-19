@@ -421,6 +421,11 @@ class Target:
         self.build_dependencies = True
 
         if directory is None:
+            try:
+                os.makedirs(config.get('temp'))
+            except OSError as e:
+                if e.errno != 17:
+                    raise e
             self.directory = tempfile.mkdtemp('', 'tmp', config.get('temp'))
             self.rmdir = True
             self.set('CCACHE_BASEDIR', os.path.realpath(self.directory))
