@@ -790,6 +790,13 @@ class OSXTarget(Target):
     def unlock_keychain(self):
         self.command('security unlock-keychain -p %s %s' % (self.osx_keychain_password, self.osx_keychain_file))
 
+    def package(self, project, checkout, output_dir, options, notarize):
+        self.unlock_keychain()
+        tree = globals.trees.get(project, checkout, self)
+        with TreeDirectory(tree):
+            p = self._cscript_package_and_notarize(tree, options, self.can_notarize and notarize)
+            self._copy_packages(tree, p, output_dir)
+
     def _copy_packages(self, tree, packages, output_dir):
         for p in packages:
             dest = os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, p)))
@@ -850,9 +857,8 @@ class OSXSingleTarget(OSXTarget):
     def package(self, project, checkout, output_dir, options, notarize):
         tree = self.build(project, checkout, options, for_package=True)
         tree.add_defaults(options)
-        self.unlock_keychain()
-        p = self._cscript_package_and_notarize(tree, options, self.can_notarize and notarize)
-        self._copy_packages(tree, p, output_dir)
+
+        super().package(project, checkout, output_dir, options, notarize)
 
 
 class OSXUniversalTarget(OSXTarget):
@@ -871,11 +877,8 @@ class OSXUniversalTarget(OSXTarget):
             tree.build_dependencies(options)
             tree.build(options, for_package=True)
 
-        self.unlock_keychain()
-        tree = globals.trees.get(project, checkout, self)
-        with TreeDirectory(tree):
-            p = self._cscript_package_and_notarize(tree, options, notarize)
-            self._copy_packages(tree, p, output_dir)
+        super().package(project, checkout, output_dir, options, notarize)
+
 
 class SourceTarget(Target):
     """Build a source .tar.bz2 and .zst"""
