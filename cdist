@@ -870,6 +870,7 @@ class OSXUniversalTarget(OSXTarget):
             target = OSXSingleTarget(arch, self.sdk, deployment, os.path.join(self.directory, arch, deployment))
             target.ccache = self.ccache
             self.sub_targets.append(target)
+        self.can_notarize = True
 
     def package(self, project, checkout, output_dir, options, notarize):
         for target in self.sub_targets:
