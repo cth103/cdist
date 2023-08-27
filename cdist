@@ -79,6 +79,7 @@ class Globals:
     quiet = False
     command = None
     dry_run = False
+    use_git_reference = True
     trees = Trees()
 
 globals = Globals()
@@ -578,33 +579,6 @@ class DockerTarget(Target):
         self.mounts.append(m)
 
 
-class FlatpakTarget(Target):
-    def __init__(self, project, checkout):
-        super(FlatpakTarget, self).__init__('flatpak')
-        self.build_dependencies = False
-        self.project = project
-        self.checkout = checkout
-
-    def setup(self):
-        pass
-
-    def command(self, cmd):
-        command(cmd)
-
-    def checkout_dependencies(self):
-        tree = globals.trees.get(self.project, self.checkout, self)
-        return tree.checkout_dependencies()
-
-    def flatpak(self):
-        return 'flatpak'
-
-    def flatpak_builder(self):
-        b = 'flatpak-builder'
-        if config.has('flatpak_state_dir'):
-            b += ' --state-dir=%s' % config.get('flatpak_state_dir')
-        return b
-
-
 class WindowsDockerTarget(DockerTarget):
     """
     This target exposes the following additional API:
@@ -748,6 +722,34 @@ class AppImageTarget(LinuxTarget):
         super(AppImageTarget, self).__init__('ubuntu', '18.04', 64, work)
         self.detail = 'appimage'
         self.privileged = True
+
+
+class FlatpakTarget(LinuxTarget):
+    def __init__(self, project, checkout, work):
+        super(FlatpakTarget, self).__init__('ubuntu', '22.04', 64, work)
+        self.platform = 'flatpak'
+        self.privileged = True
+        self.build_dependencies = False
+        self.project = project
+        self.checkout = checkout
+        # If we use git references we end up with a checkout in one mount trying
+        # to link to the git reference repo in other, which doesn't work.
+        globals.use_git_reference = False
+        if config.has('flatpak_state_dir'):
+            self.mount(config.get('flatpak_state_dir'))
+
+    def setup(self):
+        super().setup()
+        globals.trees.get(self.project, self.checkout, self).checkout_dependencies()
+
+    def flatpak(self):
+        return 'flatpak'
+
+    def flatpak_builder(self):
+        b = 'flatpak-builder'
+        if config.has('flatpak_state_dir'):
+            b += ' --state-dir=%s' % config.get('flatpak_state_dir')
+        return b
 
 
 def notarize_dmg(dmg):
@@ -951,7 +953,7 @@ def target_factory(args):
     elif s == 'source':
         target = SourceTarget()
     elif s == 'flatpak':
-        target = FlatpakTarget(args.project, args.checkout)
+        target = FlatpakTarget(args.project, args.checkout, args.work)
     elif s == 'appimage':
         target = AppImageTarget(args.work)
 
@@ -1008,7 +1010,7 @@ class Tree:
             if globals.quiet:
                 flags = '-q'
                 redirect = '>/dev/null'
-            if config.has('git_reference'):
+            if config.has('git_reference') and globals.use_git_reference:
                 ref = '--reference-if-able %s/%s.git' % (config.get('git_reference'), self.name)
             else:
                 ref = ''
@@ -1030,7 +1032,7 @@ class Tree:
                 urls = command_and_read('git config --file .gitmodules --get-regexp url')
                 for path, url in zip(paths, urls):
                     ref = ''
-                    if config.has('git_reference'):
+                    if config.has('git_reference') and globals.use_git_reference:
                         url = url.split(' ')[1]
                         ref_path = os.path.join(config.get('git_reference'), os.path.basename(url))
                         if os.path.exists(ref_path):
