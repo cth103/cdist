@@ -724,11 +724,9 @@ class AppImageTarget(LinuxTarget):
         self.privileged = True
 
 
-class FlatpakTarget(LinuxTarget):
+class FlatpakTarget(Target):
     def __init__(self, project, checkout, work):
-        super(FlatpakTarget, self).__init__('ubuntu', '22.04', 64, work)
-        self.platform = 'flatpak'
-        self.privileged = True
+        super(FlatpakTarget, self).__init__('flatpak')
         self.build_dependencies = False
         self.project = project
         self.checkout = checkout
@@ -737,6 +735,10 @@ class FlatpakTarget(LinuxTarget):
         globals.use_git_reference = False
         if config.has('flatpak_state_dir'):
             self.mount(config.get('flatpak_state_dir'))
+    
+    def command(self, c):
+        log_normal('host -> %s' % c)
+        command('%s %s' % (self.variables_string(), c))
 
     def setup(self):
         super().setup()
