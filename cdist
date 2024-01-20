@@ -583,15 +583,13 @@ class WindowsDockerTarget(DockerTarget):
     """
     This target exposes the following additional API:
 
-    version: Windows version ('xp' or None)
     bits: bitness of Windows (32 or 64)
     name: name of our target e.g. x86_64-w64-mingw32.shared
     environment_prefix: path to Windows environment for the appropriate target (libraries and some tools)
     tool_path: path to 32- and 64-bit tools
     """
-    def __init__(self, windows_version, bits, directory, environment_version):
+    def __init__(self, bits, directory, environment_version):
         super(WindowsDockerTarget, self).__init__('windows', directory)
-        self.version = windows_version
         self.bits = bits
 
         self.tool_path = '%s/usr/bin' % config.get('mxe_prefix')
@@ -657,14 +655,12 @@ class WindowsNativeTarget(Target):
     """
     This target exposes the following additional API:
 
-    version: Windows version ('xp' or None)
     bits: bitness of Windows (32 or 64)
     name: name of our target e.g. x86_64-w64-mingw32.shared
     environment_prefix: path to Windows environment for the appropriate target (libraries and some tools)
     """
     def __init__(self, directory):
         super().__init__('windows', directory)
-        self.version = None
         self.bits = 64
 
         self.environment_prefix = config.get('windows_native_environmnet_prefix')
@@ -735,7 +731,7 @@ class FlatpakTarget(Target):
         globals.use_git_reference = False
         if config.has('flatpak_state_dir'):
             self.mount(config.get('flatpak_state_dir'))
-    
+
     def command(self, c):
         log_normal('host -> %s' % c)
         command('%s %s' % (self.variables_string(), c))
@@ -927,13 +923,10 @@ def target_factory(args):
         x = s.split('-')
         if platform.system() == "Windows":
             target = WindowsNativeTarget(args.work)
+        elif len(x) == 2:
+            target = WindowsDockerTarget(int(x[1]), args.work, args.environment_version)
         else:
-            if len(x) == 2:
-                target = WindowsDockerTarget(None, int(x[1]), args.work, args.environment_version)
-            elif len(x) == 3:
-                target = WindowsDockerTarget(x[1], int(x[2]), args.work, args.environment_version)
-            else:
-                raise Error("Bad Windows target name `%s'")
+            raise Error("Bad Windows target name `%s'")
     elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-') or s.startswith('fedora-') or s.startswith('mageia-'):
         p = s.split('-')
         if len(p) != 3:
