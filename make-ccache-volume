@@ -5,7 +5,7 @@ docker volume create ccache
 volume_id=$(docker run --mount source=ccache,target=/ccache -itd ubuntu-18.04-64 bash)
 for user in $USER; do
   id=$(id -u $user)
-  for t in ubuntu-16.04-64 ubuntu-18.04-64 ubuntu-20.04-64 ubuntu-20.10-64 ubuntu-21.04-64 windows windows_2.15.x fedora-34-64 debian-10-64 fedora-35-64 ubuntu-22.04-64 ubuntu-23.04-64; do
+  for t in ubuntu-16.04-64 ubuntu-18.04-64 ubuntu-20.04-64 ubuntu-20.10-64 windows windows_v2.17.x fedora-34-64 debian-10-64 fedora-35-64 ubuntu-22.04-64 ubuntu-23.04-64 fedora-39-64; do
     docker exec $volume_id mkdir /ccache/$t-$id
     docker exec $volume_id chmod 777 /ccache/$t-$id
   done
