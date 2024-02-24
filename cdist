@@ -880,6 +880,11 @@ class OSXUniversalTarget(OSXTarget):
 
         super().package(project, checkout, output_dir, options, notarize)
 
+    @Target.ccache.setter
+    def ccache(self, v):
+        for target in self.sub_targets:
+            target.ccache = v
+
 
 class SourceTarget(Target):
     """Build a source .tar.bz2 and .zst"""
