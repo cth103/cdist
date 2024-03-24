@@ -910,6 +910,23 @@ class SourceTarget(Target):
             zstd = os.path.abspath('%s-%s.tar.zst' % (name, tree.version))
             copyfile(zstd, os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, zstd))))
 
+
+class LocalTarget(Target):
+    """Build on the local machine with its environment"""
+    def __init__(self, work):
+        super(LocalTarget, self).__init__('local', work)
+        # Hack around ffmpeg.git which sees that the target isn't windows/osx and then assumes
+        # distro will be there.
+        self.distro = None
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory))
+
+    def command(self, c):
+        log_normal('host -> %s' % c)
+        command('%s %s' % (self.variables_string(), c))
+
+    def cleanup(self):
+        rmtree(self.directory)
+
 # @param s Target string:
 #       windows-{32,64}
 #    or ubuntu-version-{32,64}
@@ -956,6 +973,8 @@ def target_factory(args):
         target = FlatpakTarget(args.project, args.checkout, args.work)
     elif s == 'appimage':
         target = AppImageTarget(args.work)
+    elif s == 'local':
+        target = LocalTarget(args.work)
 
     if target is None:
         raise Error("Bad target `%s'" % s)
