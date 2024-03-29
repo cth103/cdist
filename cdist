@@ -915,12 +915,17 @@ class SourceTarget(Target):
 
 class LocalTarget(Target):
     """Build on the local machine with its environment"""
-    def __init__(self, work):
-        super(LocalTarget, self).__init__('local', work)
+    def __init__(self, work, dependencies_only=False):
+        super(LocalTarget, self).__init__('linux', work, dependencies_only=dependencies_only)
         # Hack around ffmpeg.git which sees that the target isn't windows/osx and then assumes
         # distro will be there.
         self.distro = None
+        self.detail = None
+        self.bits = 64
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory))
+        self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
+        self.set('CXXFLAGS', '-I%s/include' % self.directory)
+        self.set('LINKFLAGS', '-L%s/lib' % self.directory)
 
     def command(self, c):
         log_normal('host -> %s' % c)
