@@ -404,7 +404,7 @@ class Target:
 
     """
 
-    def __init__(self, platform, directory=None):
+    def __init__(self, platform, directory=None, dependencies_only=False):
         """
         platform -- platform string (e.g. 'windows', 'linux', 'osx')
         directory -- directory to work in; if None we will use a temporary directory
@@ -420,6 +420,7 @@ class Target:
         # True to build our dependencies ourselves; False if this is taken care
         # of in some other way
         self.build_dependencies = True
+        self.dependencies_only = dependencies_only
 
         if directory is None:
             try:
@@ -466,7 +467,8 @@ class Target:
         tree = globals.trees.get(project, checkout, self)
         if self.build_dependencies:
             tree.build_dependencies(options)
-        tree.build(options, for_package=for_package)
+        if not self.dependencies_only:
+            tree.build(options, for_package=for_package)
         return tree
 
     def test(self, project, checkout, target, test, options):
@@ -974,7 +976,7 @@ def target_factory(args):
     elif s == 'appimage':
         target = AppImageTarget(args.work)
     elif s == 'local':
-        target = LocalTarget(args.work)
+        target = LocalTarget(args.work, args.dependencies_only)
 
     if target is None:
         raise Error("Bad target `%s'" % s)
@@ -1180,6 +1182,7 @@ def main():
 
     subparsers = parser.add_subparsers(help='command to run', dest='command')
     parser_build = subparsers.add_parser("build", help="build project")
+    parser_build.add_argument('--dependencies-only', help='only build dependencies', action='store_true')
     parser_package = subparsers.add_parser("package", help="build and package project")
     parser_package.add_argument('--no-notarize', help='do not notarize .dmg packages', action='store_true')
     parser_release = subparsers.add_parser("release", help="release a project using its next version number (adding a tag)")
