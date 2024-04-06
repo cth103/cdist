@@ -593,6 +593,9 @@ class WindowsDockerTarget(DockerTarget):
     def __init__(self, bits, directory, environment_version):
         super(WindowsDockerTarget, self).__init__('windows', directory)
         self.bits = bits
+        # This was used to differentiate "normal" Windows from XP, and is no longer important,
+        # but old cscripts still look for it
+        self.target = None
 
         self.tool_path = '%s/usr/bin' % config.get('mxe_prefix')
         if self.bits == 32:
