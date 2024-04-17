@@ -1141,7 +1141,7 @@ class Tree:
         if self.built:
             return
 
-        log_verbose("Building %s %s %s with %s" % (self.name, self.commit_ish, self.version, options))
+        log_verbose("Building %s %s %s with %s" % (self.name, self.commit_ish, self.version, self.add_defaults(options)))
 
         variables = copy.copy(self.target.variables)
 
