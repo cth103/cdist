@@ -444,6 +444,7 @@ class Target:
         """
         Call package() in the cscript and return what it returns, except that
         anything not in a list will be put into one.
+        options: from command line
         """
         if len(inspect.getfullargspec(tree.cscript['package']).args) == 3:
             packages = tree.call('package', tree.version, tree.add_defaults(options))
@@ -458,6 +459,9 @@ class Target:
             copyfile(p, os.path.join(output_dir, os.path.basename(devel_to_git(tree.commit, p))))
 
     def package(self, project, checkout, output_dir, options, notarize):
+        """
+        options: from command line
+        """
         tree = self.build(project, checkout, options, for_package=True)
         p = self._cscript_package(tree, options)
         self._copy_packages(tree, p, output_dir)
@@ -1103,8 +1107,8 @@ class Tree:
     def dependencies(self, options):
         """
         yield details of the dependencies of this tree.  Each dependency is returned
-        as a tuple of (tree, options, parent_tree).  The 'options' parameter are the options that
-        we want to force for 'self'.
+        as a tuple of (tree, options).
+        options: either from command line (for top-level tree) or from parent's dependencies() (for other trees)
         """
         if not 'dependencies' in self.cscript:
             return
@@ -1132,12 +1136,15 @@ class Tree:
     def build_dependencies(self, options):
         """
         Called on the 'main' project tree (-p on the command line) to build all dependencies.
-        'options' will be the ones from the command line.
+        options: either from command line (for top-level tree) or from parent's dependencies() (for other trees)
         """
         for i in self.dependencies(options):
             i[0].build(i[1])
 
     def build(self, options, for_package=False):
+        """
+        options: either from command line (for top-level tree) or from parent's dependencies() (for other trees)
+        """
         if self.built:
             return
 
