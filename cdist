@@ -1127,7 +1127,7 @@ class Tree:
             dep_options = d[2] if len(d) > 2 else {}
             for i in dep.dependencies(dep_options):
                 yield i
-            yield (dep, dep_options, self)
+            yield (dep, dep_options)
 
     def checkout_dependencies(self, options={}):
         for i in self.dependencies(options):
@@ -1406,19 +1406,6 @@ def main():
         with TreeDirectory(tree):
             shutil.copytree('.', args.output)
         target.cleanup()
-
-    elif args.command == 'dependencies':
-        if args.target is None:
-            raise Error('you must specify -t or --target')
-        if args.checkout is None:
-            raise Error('you must specify -c or --checkout')
-
-        target = target_factory(args)
-        tree = globals.trees.get(args.project, args.checkout, target)
-        print("strict digraph {")
-        for d in list(tree.dependencies({})):
-            print("%s -> %s;" % (d[2].name.replace("-", "-"), d[0].name.replace("-", "_")))
-        print("}")
 
     elif args.command == 'notarize':
         if args.dmgs is None:
