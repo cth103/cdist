@@ -446,7 +446,7 @@ class Target:
         anything not in a list will be put into one.
         """
         if len(inspect.getfullargspec(tree.cscript['package']).args) == 3:
-            packages = tree.call('package', tree.version, options)
+            packages = tree.call('package', tree.version, tree.add_defaults(options))
         else:
             log_normal("Deprecated cscript package() method with no options parameter")
             packages = tree.call('package', tree.version)
@@ -459,7 +459,6 @@ class Target:
 
     def package(self, project, checkout, output_dir, options, notarize):
         tree = self.build(project, checkout, options, for_package=True)
-        tree.add_defaults(options)
         p = self._cscript_package(tree, options)
         self._copy_packages(tree, p, output_dir)
 
@@ -475,10 +474,9 @@ class Target:
         """test is the test case to run, or None"""
         tree = globals.trees.get(project, checkout, target)
 
-        tree.add_defaults(options)
         with TreeDirectory(tree):
             if len(inspect.getfullargspec(tree.cscript['test']).args) == 3:
-                return tree.call('test', options, test)
+                return tree.call('test', tree.add_defaults(options), test)
             else:
                 log_normal('Deprecated cscript test() method with no options parameter')
                 return tree.call('test', test)
@@ -861,8 +859,6 @@ class OSXSingleTarget(OSXTarget):
 
     def package(self, project, checkout, output_dir, options, notarize):
         tree = self.build(project, checkout, options, for_package=True)
-        tree.add_defaults(options)
-
         super().package(project, checkout, output_dir, options, notarize)
 
 
