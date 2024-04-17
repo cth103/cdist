@@ -1138,8 +1138,8 @@ class Tree:
         Called on the 'main' project tree (-p on the command line) to build all dependencies.
         options: either from command line (for top-level tree) or from parent's dependencies() (for other trees)
         """
-        for i in self.dependencies(options):
-            i[0].build(i[1])
+        for dependency, dependency_options in self.dependencies(options):
+            dependency.build(dependency_options)
 
     def build(self, options, for_package=False):
         """
