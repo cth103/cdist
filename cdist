@@ -1090,7 +1090,8 @@ class Tree:
             return self.cscript[function](self.target, *args)
 
     def add_defaults(self, options):
-        """Add the defaults from self into a dict options"""
+        """Add the defaults from self into a dict options and returns a new dict"""
+        new_options = copy.copy(options)
         if 'option_defaults' in self.cscript:
             from_cscript = self.cscript['option_defaults']
             if isinstance(from_cscript, dict):
@@ -1099,8 +1100,9 @@ class Tree:
                 log_normal("Deprecated cscript option_defaults method; replace with a dict")
                 defaults_dict = from_cscript()
             for k, v in defaults_dict.items():
-                if not k in options:
-                    options[k] = v
+                if not k in new_options:
+                    new_options[k] = v
+        return new_options
 
     def dependencies(self, options):
         """
@@ -1112,9 +1114,7 @@ class Tree:
             return
 
         if len(inspect.getfullargspec(self.cscript['dependencies']).args) == 2:
-            self_options = copy.copy(options)
-            self.add_defaults(self_options)
-            deps = self.call('dependencies', self_options)
+            deps = self.call('dependencies', self.add_defaults(options))
         else:
             log_normal("Deprecated cscript dependencies() method with no options parameter")
             deps = self.call('dependencies')
@@ -1149,15 +1149,12 @@ class Tree:
 
         variables = copy.copy(self.target.variables)
 
-        options = copy.copy(options)
-        self.add_defaults(options)
-
         if not globals.dry_run:
             num_args = len(inspect.getfullargspec(self.cscript['build']).args)
             if num_args == 3:
-                self.call('build', options, for_package)
+                self.call('build', self.add_defaults(options), for_package)
             elif num_args == 2:
-                self.call('build', options)
+                self.call('build', self.add_defaults(options))
             else:
                 self.call('build')
 
