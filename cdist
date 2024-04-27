@@ -327,61 +327,6 @@ class TreeDirectory:
     def __exit__(self, type, value, traceback):
         os.chdir(self.cwd)
 
-#
-# Version
-#
-
-class Version:
-    def __init__(self, s):
-        self.devel = False
-
-        if s.startswith("'"):
-            s = s[1:]
-        if s.endswith("'"):
-            s = s[0:-1]
-
-        if s.endswith('devel'):
-            s = s[0:-5]
-            self.devel = True
-
-        if s.endswith('pre'):
-            s = s[0:-3]
-
-        p = s.split('.')
-        self.major = int(p[0])
-        self.minor = int(p[1])
-        if len(p) == 3:
-            self.micro = int(p[2])
-        else:
-            self.micro = 0
-
-    @classmethod
-    def from_git_tag(cls, tag):
-        bits = tag.split('-')
-        c = cls(bits[0])
-        if len(bits) > 1 and int(bits[1]) > 0:
-            c.devel = True
-        return c
-
-    def bump_minor(self):
-        self.minor += 1
-        self.micro = 0
-
-    def bump_micro(self):
-        self.micro += 1
-
-    def to_devel(self):
-        self.devel = True
-
-    def to_release(self):
-        self.devel = False
-
-    def __str__(self):
-        s = '%d.%d.%d' % (self.major, self.minor, self.micro)
-        if self.devel:
-            s += 'devel'
-
-        return s
 
 #
 # Targets
@@ -1069,19 +1014,11 @@ class Tree:
                     path = path.split(' ')[1]
                     command('git -c protocol.file.allow=always submodule --quiet update %s %s' % (ref, path))
 
-        if os.path.exists('%s/wscript' % proj):
-            v = read_wscript_variable(proj, "VERSION");
-            if v is not None:
-                try:
-                    self.version = Version(v)
-                except:
-                    try:
-                        tag = command_and_read('git -C %s describe --match v* --tags' % proj)[0][1:]
-                        self.version = Version.from_git_tag(tag)
-                    except:
-                        # We'll leave version as None if we can't read it; maybe this is a bad idea
-                        # Should probably just install git on the Windows VM
-                        pass
+        head_tag = command_and_read(f'git -C {proj} tag -l --points-at HEAD')
+        if head_tag:
+            self.version = head_tag[0]
+        else:
+            self.version = command_and_read(f'git -C {proj} rev-parse --short HEAD')[0]
 
         os.chdir(cwd)
 
