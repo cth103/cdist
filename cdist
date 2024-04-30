@@ -1016,7 +1016,7 @@ class Tree:
 
         head_tag = command_and_read(f'git -C {proj} tag -l --points-at HEAD')
         if head_tag:
-            self.version = head_tag[0]
+            self.version = head_tag[0][1:]
         else:
             self.version = command_and_read(f'git -C {proj} rev-parse --short HEAD')[0]
 
