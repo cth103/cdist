@@ -615,7 +615,7 @@ class WindowsNativeTarget(Target):
         super().__init__('windows', directory)
         self.bits = 64
 
-        self.environment_prefix = config.get('windows_native_environmnet_prefix')
+        self.environment_prefix = config.get('windows_native_environment_prefix')
 
         self.set('PATH', '%s/bin:%s' % (self.environment_prefix, os.environ['PATH']))
 
