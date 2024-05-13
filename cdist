@@ -727,10 +727,12 @@ def notarize_dmg(dmg):
 
 
 class OSXTarget(Target):
-    def __init__(self, directory=None):
+    def __init__(self, directory=None, environment_version=None):
         super(OSXTarget, self).__init__('osx', directory)
         self.sdk_prefix = config.get('osx_sdk_prefix')
         self.environment_prefix = config.get('osx_environment_prefix')
+        if environment_version:
+            self.environment_prefix += '_%s' % environment_version
         self.apple_id = config.get('apple_id')
         self.apple_password = config.get('apple_password')
         self.osx_keychain_file = config.get('osx_keychain_file')
@@ -771,8 +773,8 @@ class OSXTarget(Target):
 
 
 class OSXSingleTarget(OSXTarget):
-    def __init__(self, arch, sdk, deployment, directory=None, can_notarize=True):
-        super(OSXSingleTarget, self).__init__(directory)
+    def __init__(self, arch, sdk, deployment, directory=None, can_notarize=True, environment_version=None):
+        super(OSXSingleTarget, self).__init__(directory=directory, environment_version=environment_version)
         self.arch = arch
         self.sdk = sdk
         self.deployment = deployment
@@ -781,10 +783,10 @@ class OSXSingleTarget(OSXTarget):
 
         flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (self.sdk_prefix, sdk, arch)
         if arch == 'x86_64':
-            host_enviro = '%s/x86_64/%s' % (config.get('osx_environment_prefix'), deployment)
+            host_enviro = '%s/x86_64/%s' % (self.environment_prefix, deployment)
         else:
-            host_enviro = '%s/x86_64/10.10' % config.get('osx_environment_prefix')
-        target_enviro = '%s/%s/%s' % (config.get('osx_environment_prefix'), arch, deployment)
+            host_enviro = '%s/x86_64/10.10' % self.environment_prefix
+        target_enviro = '%s/%s/%s' % (self.environment_prefix, arch, deployment)
 
         self.bin = '%s/bin' % target_enviro
 
@@ -812,12 +814,12 @@ class OSXSingleTarget(OSXTarget):
 
 
 class OSXUniversalTarget(OSXTarget):
-    def __init__(self, directory=None):
-        super(OSXUniversalTarget, self).__init__(directory)
+    def __init__(self, directory=None, environment_version=None):
+        super(OSXUniversalTarget, self).__init__(directory=directory, environment_version=environment_version)
         self.sdk = config.get('osx_sdk')
         self.sub_targets = []
         for arch, deployment in (('x86_64', config.get('osx_intel_deployment')), ('arm64', config.get('osx_arm_deployment'))):
-            target = OSXSingleTarget(arch, self.sdk, deployment, os.path.join(self.directory, arch, deployment))
+            target = OSXSingleTarget(arch, self.sdk, deployment, os.path.join(self.directory, arch, deployment), environment_version=environment_version)
             target.ccache = self.ccache
             self.sub_targets.append(target)
         self.can_notarize = True
@@ -917,11 +919,11 @@ def target_factory(args):
     elif s == 'raspbian':
         target = LinuxTarget(s, None, None, args.work)
     elif s == 'osx':
-        target = OSXUniversalTarget(args.work)
+        target = OSXUniversalTarget(args.work, environment_version=args.environment_version)
     elif s == 'osx-intel':
-        target = OSXSingleTarget('x86_64', config.get('osx_sdk'), config.get('osx_intel_deployment'), args.work)
+        target = OSXSingleTarget('x86_64', config.get('osx_sdk'), config.get('osx_intel_deployment'), args.work, environment_version=args.environment_version)
     elif s == 'osx-old':
-        target = OSXSingleTarget('x86_64', config.get('osx_sdk'), config.get('osx_old_deployment'), args.work, False)
+        target = OSXSingleTarget('x86_64', config.get('osx_sdk'), config.get('osx_old_deployment'), args.work, False, environment_version=args.environment_version)
     elif s == 'source':
         target = SourceTarget()
     elif s == 'flatpak':
