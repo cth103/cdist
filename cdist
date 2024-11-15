@@ -1268,7 +1268,7 @@ def main():
             while latest is None:
                 t = f[line]
                 line += 1
-                m = re.compile(".*\((.*)\).*").match(t)
+                m = re.compile(r".*\((.*)\).*").match(t)
                 if m:
                     tags = m.group(1).split(', ')
                     for t in tags:
