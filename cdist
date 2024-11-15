@@ -636,7 +636,7 @@ class LinuxTarget(DockerTarget):
     """
 
     def __init__(self, distro, version, bits, directory=None):
-        super(LinuxTarget, self).__init__('linux', directory)
+        super().__init__('linux', directory)
         self.distro = distro
         self.version = version
         self.bits = bits
@@ -655,7 +655,7 @@ class LinuxTarget(DockerTarget):
             self.image = '%s-%s-%s' % (self.distro, self.version, self.bits)
 
     def setup(self):
-        super(LinuxTarget, self).setup()
+        super().setup()
         if self.ccache:
             self.set('CC', '"ccache gcc"')
             self.set('CXX', '"ccache g++"')
@@ -663,7 +663,7 @@ class LinuxTarget(DockerTarget):
     def test(self, project, checkout, target, test, options):
         self.append_with_colon('PATH', '%s/bin' % self.directory)
         self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
-        super(LinuxTarget, self).test(project, checkout, target, test, options)
+        super().test(project, checkout, target, test, options)
 
 
 class AppImageTarget(LinuxTarget):
