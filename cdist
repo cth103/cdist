@@ -624,7 +624,7 @@ class WindowsNativeTarget(Target):
         command(cmd)
 
 
-class LinuxTarget(DockerTarget):
+class LinuxDockerTarget(DockerTarget):
     """
     Build for Linux in a docker container.
     This target exposes the following additional API:
@@ -666,7 +666,7 @@ class LinuxTarget(DockerTarget):
         super().test(project, checkout, target, test, options)
 
 
-class AppImageTarget(LinuxTarget):
+class AppImageTarget(LinuxDockerTarget):
     def __init__(self, work):
         super(AppImageTarget, self).__init__('ubuntu', '18.04', 64, work)
         self.detail = 'appimage'
@@ -911,14 +911,14 @@ def target_factory(args):
         p = s.split('-')
         if len(p) != 3:
             raise Error("Bad Linux target name `%s'; must be something like ubuntu-16.04-32 (i.e. distro-version-bits)" % s)
-        target = LinuxTarget(p[0], p[1], int(p[2]), args.work)
+        target = LinuxDockerTarget(p[0], p[1], int(p[2]), args.work)
     elif s.startswith('arch-'):
         p = s.split('-')
         if len(p) != 2:
             raise Error("Bad Arch target name `%s'; must be arch-32 or arch-64")
-        target = LinuxTarget(p[0], None, int(p[1]), args.work)
+        target = LinuxDockerTarget(p[0], None, int(p[1]), args.work)
     elif s == 'raspbian':
-        target = LinuxTarget(s, None, None, args.work)
+        target = LinuxDockerTarget(s, None, None, args.work)
     elif s == 'osx':
         target = OSXUniversalTarget(args.work, environment_version=args.environment_version)
     elif s == 'osx-intel':
