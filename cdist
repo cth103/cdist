@@ -975,16 +975,17 @@ def target_factory(args):
 #
 
 class Tree:
-    """Description of a tree, which is a checkout of a project,
-       possibly built.  This class is never exposed to cscripts.
-       Attributes:
-           name -- name of git repository (without the .git)
-           commit_ish -- git tag or revision to use
-           target -- target object that we are using
-           version -- version from the wscript (if one is present)
-           commit -- git revision that is actually being used
-           built -- true if the tree has been built yet in this run
-           required_by -- name of the tree that requires this one
+    """
+    Description of a tree, which is a checkout of a project,
+    possibly built.  This class is never exposed to cscripts.
+    Attributes:
+        name -- name of git repository (without the .git)
+        commit_ish -- git tag or revision to use
+        target -- target object that we are using
+        version -- version from the wscript (if one is present)
+        commit -- git revision that is actually being used
+        built -- true if the tree has been built yet in this run
+        required_by -- name of the tree that requires this one
     """
 
     def __init__(self, name, commit_ish, target, required_by, built=False):
