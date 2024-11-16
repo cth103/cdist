@@ -349,7 +349,7 @@ class Target:
 
     """
 
-    def __init__(self, platform, directory=None, dependencies_only=False):
+    def __init__(self, platform, directory=None, dependencies_only=False, *a, **k):
         """
         platform -- platform string (e.g. 'windows', 'linux', 'osx')
         directory -- directory to work in; if None we will use a temporary directory
@@ -612,8 +612,8 @@ class WindowsNativeTarget(Target):
     name: name of our target e.g. x86_64-w64-mingw32.shared
     environment_prefix: path to Windows environment for the appropriate target (libraries and some tools)
     """
-    def __init__(self, directory):
-        super().__init__('windows', directory)
+    def __init__(self, *a, **k):
+        super().__init__(platform='windows', *a, **k)
         self.bits = 64
 
         self.environment_prefix = config.get('windows_native_environment_prefix')
@@ -624,23 +624,21 @@ class WindowsNativeTarget(Target):
         command(cmd)
 
 
-class LinuxDockerTarget(DockerTarget):
+class LinuxTarget(Target):
     """
-    Build for Linux in a docker container.
     This target exposes the following additional API:
 
-    distro: distribution ('debian', 'ubuntu', 'centos' or 'fedora')
-    version: distribution version (e.g. '12.04', '8', '6.5')
-    detail: None or 'appimage' if we are building for appimage
+    cpu: CPU architecture we are building for (x86 or arm)
     """
 
-    def __init__(self, distro, version, directory=None):
-        super().__init__('linux', directory)
+    def __init__(self, distro, version, cpu, *a, **k):
+        super().__init__(platform="linux", *a, **k)
         self.distro = distro
         self.version = version
         self.detail = None
         # Some cscripts still expect this
         self.bits = 64
+        self.cpu = cpu
 
         self.set('CXXFLAGS', '-I%s/include' % self.directory)
         self.set('CPPFLAGS', '')
@@ -648,11 +646,6 @@ class LinuxDockerTarget(DockerTarget):
         self.set('PKG_CONFIG_PATH',
                  '%s/lib/pkgconfig:%s/lib64/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
-
-        if self.version is None:
-            self.image = '%s-64' % self.distro
-        else:
-            self.image = '%s-%s-64' % self.distro, self.version
 
     def setup(self):
         super().setup()
@@ -664,6 +657,23 @@ class LinuxDockerTarget(DockerTarget):
         self.append_with_colon('PATH', '%s/bin' % self.directory)
         self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
         super().test(project, checkout, target, test, options)
+
+
+class LinuxDockerTarget(DockerTarget, LinuxTarget):
+    """
+    Build for Linux in a docker container.
+    This target exposes the following additional API:
+
+    distro: distribution ('debian', 'ubuntu', 'centos' or 'fedora')
+    version: distribution version (e.g. '12.04', '8', '6.5')
+    detail: None or 'appimage' if we are building for appimage
+    """
+    def __init__(self, version, *a, **k):
+        super().__init__(*a, **k)
+        if version is None:
+            self.image = '%s-64' % self.distro
+        else:
+            self.image = '%s-%s-64' % (self.distro, self.version)
 
 
 class AppImageTarget(LinuxDockerTarget):
@@ -866,8 +876,8 @@ class SourceTarget(Target):
 
 class LocalTarget(Target):
     """Build on the local machine with its environment"""
-    def __init__(self, work, dependencies_only=False):
-        super(LocalTarget, self).__init__('linux', work, dependencies_only=dependencies_only)
+    def __init__(self, *a, **k):
+        super(LocalTarget, self).__init__(*a, **k)
         # Hack around ffmpeg.git which sees that the target isn't windows/osx and then assumes
         # distro will be there.
         self.distro = None
@@ -883,6 +893,12 @@ class LocalTarget(Target):
 
     def cleanup(self):
         rmtree(self.directory)
+
+
+class LinuxLocalTarget(LinuxTarget, LocalTarget):
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+
 
 # @param s Target string:
 #       windows-{32,64}
@@ -909,8 +925,11 @@ def target_factory(args):
     elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-') or s.startswith('fedora-') or s.startswith('mageia-'):
         p = s.split('-')
         if len(p) != 3:
-            raise Error("Bad Linux target name `%s'; must be something like ubuntu-16.04-32 (i.e. distro-version-bits)" % s)
-        target = LinuxDockerTarget(p[0], p[1], args.work)
+            raise Error("Bad Linux target name `%s'; must be something like ubuntu-16.04-32 (i.e. distro-version-bits), fedora-41-arm or debian-64-x86 (distro-version-cpu)" % s)
+        if p[2] == "64" or p[2] == "x86":
+            target = LinuxDockerTarget(distro=p[0], version=p[1], cpu="x86", directory=args.work)
+        elif p[2] == "arm":
+            target = LinuxLocalTarget(distro=p[0], version=p[1], cpu="arm", directory=args.work)
     elif s.startswith('arch-'):
         p = s.split('-')
         if len(p) != 2:
@@ -1207,10 +1226,11 @@ def main():
             target = target_factory(args)
 
             if target.platform == 'linux' and target.detail != "appimage":
+                qualifier = 'arm' if target.cpu == 'arm' else 64
                 if target.distro != 'arch':
-                    output_dir = os.path.join(args.output, '%s-%s-64' % (target.distro, target.version))
+                    output_dir = os.path.join(args.output, '%s-%s-%s' % (target.distro, target.version, qualifier))
                 else:
-                    output_dir = os.path.join(args.output, '%s-64' % target.distro)
+                    output_dir = os.path.join(args.output, '%s-%s' % (target.distro, qualifier))
             else:
                 output_dir = args.output
 
