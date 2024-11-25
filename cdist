@@ -366,6 +366,7 @@ class Target:
         # of in some other way
         self.build_dependencies = True
         self.dependencies_only = dependencies_only
+        self.environment_prefix = None
 
         if directory is None:
             try:
