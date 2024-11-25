@@ -481,8 +481,8 @@ class Target:
 
 
 class DockerTarget(Target):
-    def __init__(self, platform, directory):
-        super(DockerTarget, self).__init__(platform, directory)
+    def __init__(self, *a, **k):
+        super(DockerTarget, self).__init__(*a, **k)
         self.mounts = []
         self.privileged = False
 
@@ -668,9 +668,9 @@ class LinuxDockerTarget(DockerTarget, LinuxTarget):
     version: distribution version (e.g. '12.04', '8', '6.5')
     detail: None or 'appimage' if we are building for appimage
     """
-    def __init__(self, version, *a, **k):
+    def __init__(self, *a, **k):
         super().__init__(*a, **k)
-        if version is None:
+        if self.version is None:
             self.image = '%s-64' % self.distro
         else:
             self.image = '%s-%s-64' % (self.distro, self.version)
