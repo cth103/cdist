@@ -1227,7 +1227,7 @@ def main():
             target = target_factory(args)
 
             if target.platform == 'linux' and target.detail != "appimage":
-                qualifier = 'arm' if target.cpu == 'arm' else 64
+                qualifier = 'arm' if target.cpu == 'arm' else 'x86'
                 if target.distro != 'arch':
                     output_dir = os.path.join(args.output, '%s-%s-%s' % (target.distro, target.version, qualifier))
                 else:
