@@ -495,6 +495,7 @@ class DockerTarget(Target):
         return '-v %s:%s ' % (os.path.realpath(d), os.path.realpath(d))
 
     def setup(self):
+        super().setup()
         opts = self._mount_option(self.directory)
         for m in self.mounts:
             opts += self._mount_option(m)
