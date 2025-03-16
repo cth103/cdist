@@ -360,7 +360,7 @@ class Target:
 
         # Environment variables that we will use when we call cscripts
         self.variables = {}
-        self.debug = False
+        self._debug = False
         self._ccache = False
         # True to build our dependencies ourselves; False if this is taken care
         # of in some other way
@@ -478,6 +478,14 @@ class Target:
     @ccache.setter
     def ccache(self, v):
         self._ccache = v
+
+    @property
+    def debug(self):
+        return self._debug
+
+    @debug.setter
+    def debug(self, v):
+        self._debug = v
 
 
 class DockerTarget(Target):
@@ -848,6 +856,11 @@ class OSXUniversalTarget(OSXTarget):
     def ccache(self, v):
         for target in self.sub_targets:
             target.ccache = v
+
+    @Target.debug.setter
+    def debug(self, v):
+        for target in self.sub_targets:
+            target.debug = v
 
 
 class SourceTarget(Target):
