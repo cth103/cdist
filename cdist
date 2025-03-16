@@ -1007,7 +1007,6 @@ class Tree:
         self.name = name
         self.commit_ish = commit_ish
         self.target = target
-        self.version = None
         self.commit = None
         self.built = built
         self.required_by = required_by
@@ -1051,13 +1050,12 @@ class Tree:
                     path = path.split(' ')[1]
                     command('git -c protocol.file.allow=always submodule --quiet update %s %s' % (ref, path))
 
-        head_tag = command_and_read(f'git -C {proj} tag -l --points-at HEAD')
-        if head_tag:
-            self.version = head_tag[0][1:]
-        else:
-            self.version = command_and_read(f'git -C {proj} rev-parse --short HEAD')[0]
-
         os.chdir(cwd)
+
+    @property
+    def version(self):
+        head_tag = command_and_read(f'git -C {proj} tag -l --points-at HEAD')
+        return head_tag[0][1:] if head_tag else command_and_read(f'git -C {proj} rev-parse --short HEAD')[0]
 
     def call(self, function, *args):
         with TreeDirectory(self):
