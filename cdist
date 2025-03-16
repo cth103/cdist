@@ -490,7 +490,7 @@ class Target:
 
 class DockerTarget(Target):
     def __init__(self, *a, **k):
-        super(DockerTarget, self).__init__(*a, **k)
+        super().__init__(*a, **k)
         self.mounts = []
         self.privileged = False
 
@@ -548,7 +548,7 @@ class WindowsDockerTarget(DockerTarget):
     tool_path: path to 32- and 64-bit tools
     """
     def __init__(self, bits, directory, environment_version):
-        super(WindowsDockerTarget, self).__init__('windows', directory)
+        super().__init__(directory=directory, platform='windows')
         self.bits = bits
         # This was used to differentiate "normal" Windows from XP, and is no longer important,
         # but old cscripts still look for it
@@ -932,9 +932,9 @@ def target_factory(args):
     if s.startswith('windows-'):
         x = s.split('-')
         if platform.system() == "Windows":
-            target = WindowsNativeTarget(args.work)
+            target = WindowsNativeTarget(directory=args.work)
         elif len(x) == 2:
-            target = WindowsDockerTarget(int(x[1]), args.work, args.environment_version)
+            target = WindowsDockerTarget(bits=x[1], directory=args.work, environment_version=args.environment_version)
         else:
             raise Error("Bad Windows target name `%s'")
     elif any([s.startswith(prefix) for prefix in ('ubuntu-', 'debian-', 'centos-', 'fedora-', 'mageia-', 'rocky-')]):
