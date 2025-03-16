@@ -1150,6 +1150,7 @@ def main():
     parser.add_argument('-t', '--target', help='target', action='append')
     parser.add_argument('--environment-version', help='version of environment to use')
     parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
+    parser.add_argument('--keep-on-error', help='keep working tree if there is an error', action='store_true')
     parser.add_argument('--debug', help='build with debugging symbols where possible', action='store_true')
     parser.add_argument('-w', '--work', help='override default work directory')
     parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
@@ -1227,8 +1228,11 @@ def main():
         target = target_factory(args)
         try:
             target.build(args.project, args.checkout, get_command_line_options(args))
+        except Exception as e:
+            error = True
+            raise e
         finally:
-            if not args.keep:
+            if not args.keep and not (args.keep_on_error and error):
                 target.cleanup()
 
     elif args.command == 'package':
@@ -1250,8 +1254,11 @@ def main():
 
             makedirs(output_dir)
             target.package(args.project, args.checkout, output_dir, get_command_line_options(args), not args.no_notarize)
+        except Exception as e:
+            error = True
+            raise e
         finally:
-            if target is not None and not args.keep:
+            if target is not None and not args.keep and not (args.keep_on_error and error):
                 target.cleanup()
 
     elif args.command == 'pot':
@@ -1322,6 +1329,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = None
+        error = False
         try:
             target = target_factory(args)
             options = get_command_line_options(args)
@@ -1330,8 +1338,11 @@ def main():
             else:
                 target.build(args.project, args.checkout, options)
             target.test(args.project, args.checkout, target, args.test, options)
+        except Exception as e:
+            error = True
+            raise e
         finally:
-            if target is not None and not args.keep:
+            if target is not None and not args.keep and not (args.keep_on_error and error):
                 target.cleanup()
 
     elif args.command == 'shell':
