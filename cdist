@@ -921,6 +921,7 @@ class LinuxLocalTarget(LinuxTarget, LocalTarget):
 #    or centos-version-{32,64}
 #    or fedora-version-{32,64}
 #    or mageia-version-{32,64}
+#    or rocky-version-x86
 #    or osx
 #    or source
 #    or flatpak
@@ -936,7 +937,7 @@ def target_factory(args):
             target = WindowsDockerTarget(int(x[1]), args.work, args.environment_version)
         else:
             raise Error("Bad Windows target name `%s'")
-    elif s.startswith('ubuntu-') or s.startswith('debian-') or s.startswith('centos-') or s.startswith('fedora-') or s.startswith('mageia-'):
+    elif any([s.startswith(prefix) for prefix in ('ubuntu-', 'debian-', 'centos-', 'fedora-', 'mageia-', 'rocky-')]):
         p = s.split('-')
         if len(p) != 3:
             raise Error("Bad Linux target name `%s'; must be something like ubuntu-16.04-32 (i.e. distro-version-bits), fedora-41-arm or debian-64-x86 (distro-version-cpu)" % s)
