@@ -934,7 +934,7 @@ def target_factory(args):
         if platform.system() == "Windows":
             target = WindowsNativeTarget(directory=args.work)
         elif len(x) == 2:
-            target = WindowsDockerTarget(bits=x[1], directory=args.work, environment_version=args.environment_version)
+            target = WindowsDockerTarget(bits=int(x[1]), directory=args.work, environment_version=args.environment_version)
         else:
             raise Error("Bad Windows target name `%s'")
     elif any([s.startswith(prefix) for prefix in ('ubuntu-', 'debian-', 'centos-', 'fedora-', 'mageia-', 'rocky-')]):
@@ -1012,7 +1012,6 @@ class Tree:
         self.required_by = required_by
 
         cwd = os.getcwd()
-        proj = '%s/src/%s' % (target.directory, self.name)
 
         if not built:
             flags = ''
@@ -1032,7 +1031,7 @@ class Tree:
             self.commit = command_and_read('git rev-parse --short=7 HEAD')[0].strip()
 
         self.cscript = {}
-        exec(open('%s/cscript' % proj).read(), self.cscript)
+        exec(open('%s/cscript' % self._project).read(), self.cscript)
 
         if not built:
             # cscript can include submodules = False to stop submodules being fetched
@@ -1053,9 +1052,13 @@ class Tree:
         os.chdir(cwd)
 
     @property
+    def _project(self):
+        return '%s/src/%s' % (self.target.directory, self.name)
+
+    @property
     def version(self):
-        head_tag = command_and_read(f'git -C {proj} tag -l --points-at HEAD')
-        return head_tag[0][1:] if head_tag else command_and_read(f'git -C {proj} rev-parse --short HEAD')[0]
+        head_tag = command_and_read(f'git -C {self._project} tag -l --points-at HEAD')
+        return head_tag[0][1:] if head_tag else command_and_read(f'git -C {self._project} rev-parse --short HEAD')[0]
 
     def call(self, function, *args):
         with TreeDirectory(self):
