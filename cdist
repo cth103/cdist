@@ -1356,12 +1356,7 @@ def main():
         target.command('bash')
 
     elif args.command == 'revision':
-
-        target = SourceTarget()
-        tree = globals.trees.get(args.project, args.checkout, target)
-        with TreeDirectory(tree):
-            print(command_and_read('git rev-parse HEAD')[0].strip()[:7])
-        target.cleanup()
+        print(command_and_read('git ls-remote %s/%s.git %s' % (config.get('git_prefix'), args.project, args.checkout))[0].strip()[:7])
 
     elif args.command == 'checkout':
 
