@@ -765,8 +765,8 @@ class OSXTarget(Target):
         self.command('security unlock-keychain -p %s %s' % (self.osx_keychain_password, self.osx_keychain_file))
 
     def package(self, project, checkout, output_dir, options, notarize):
-        self.unlock_keychain()
         tree = globals.trees.get(project, checkout, self)
+        self.unlock_keychain()
         with TreeDirectory(tree):
             p = self._cscript_package_and_notarize(tree, options, self.can_notarize and notarize)
             self._copy_packages(tree, p, output_dir)
