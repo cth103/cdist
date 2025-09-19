@@ -1356,7 +1356,10 @@ def main():
         target.command('bash')
 
     elif args.command == 'revision':
-        print(command_and_read('git ls-remote %s/%s.git %s' % (config.get('git_prefix'), args.project, args.checkout))[0].strip()[:10])
+        try:
+            print(command_and_read('git ls-remote %s/%s.git %s' % (config.get('git_prefix'), args.project, args.checkout))[0].strip()[:10])
+        except:
+            print(args.checkout)
 
     elif args.command == 'checkout':
 
