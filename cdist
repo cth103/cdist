@@ -949,9 +949,9 @@ def target_factory(args):
         p = s.split('-')
         if len(p) != 2:
             raise Error("Bad Arch target name `%s'; must be arch-32 or arch-64")
-        target = LinuxDockerTarget(p[0], None, directory=args.work)
+        target = LinuxDockerTarget(p[0], None, cpu="x86", directory=args.work)
     elif s == 'raspbian':
-        target = LinuxDockerTarget(s, None, directory=args.work)
+        target = LinuxDockerTarget(s, None, cpu="arm", directory=args.work)
     elif s == 'osx':
         target = OSXUniversalTarget(args.work, environment_version=args.environment_version)
     elif s == 'osx-intel':
