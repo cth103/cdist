@@ -963,7 +963,7 @@ def target_factory(args):
     elif s == 'flatpak':
         target = FlatpakTarget(args.project, args.checkout, args.work)
     elif s == 'appimage':
-        target = AppImageTarget(args.work, ubuntu_version='16.04')
+        target = AppImageTarget(args.work, ubuntu_version='18.04')
     elif s == 'appimage-old':
         target = AppImageTarget(args.work, ubuntu_version='14.04')
     elif s == 'local':
