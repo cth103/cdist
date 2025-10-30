@@ -970,7 +970,7 @@ def target_factory(args):
     elif s == 'appimage-old':
         target = AppImageTarget(args.work, ubuntu_version='14.04')
     elif s == 'local':
-        target = LocalTarget(args.work, args.dependencies_only)
+        target = LinuxLocalTarget(args.work, args.dependencies_only, cpu='x86')
 
     if target is None:
         raise Error("Bad target `%s'" % s)
