@@ -901,6 +901,7 @@ class LocalTarget(Target):
         # distro will be there.
         self.distro = None
         self.detail = None
+        self.version = None
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory))
         self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
         self.set('CXXFLAGS', '-I%s/include' % self.directory)
@@ -972,7 +973,7 @@ def target_factory(args):
     elif s == 'appimage-old':
         target = AppImageTarget(args.work, ubuntu_version='14.04')
     elif s == 'local':
-        target = LinuxLocalTarget(args.work, args.dependencies_only, cpu='x86')
+        target = LocalTarget(directory=args.work, dependencies_only=args.dependencies_only, platform="linux")
 
     if target is None:
         raise Error("Bad target `%s'" % s)
