@@ -265,7 +265,9 @@ def rmtree(a):
     log_normal('remove %s' % a)
     shutil.rmtree(a, ignore_errors=True)
 
-def command(c):
+def command(c, ssh_key=None):
+    if ssh_key:
+        c = 'ssh-agent bash -c "ssh-add %s; %s"' % (ssh_key, c)
     log_normal(c)
     try:
         r = subprocess.run(c, shell=True)
@@ -1017,6 +1019,7 @@ class Tree:
         self.required_by = required_by
 
         cwd = os.getcwd()
+        ssh_key = args.key if hasattr(args, 'key') else None
 
         if not built:
             flags = ''
@@ -1028,7 +1031,7 @@ class Tree:
                 ref = '--reference-if-able %s/%s.git' % (config.get('git_reference'), self.name)
             else:
                 ref = ''
-            command('git -c protocol.file.allow=always clone %s %s %s/%s.git %s/src/%s' % (flags, ref, config.get('git_prefix'), self.name, target.directory, self.name))
+            command('git -c protocol.file.allow=always clone %s %s %s/%s.git %s/src/%s' % (flags, ref, config.get('git_prefix'), self.name, target.directory, self.name), ssh_key)
             os.chdir('%s/src/%s' % (target.directory, self.name))
 
             if self.commit_ish is not None:
@@ -1052,7 +1055,7 @@ class Tree:
                         if os.path.exists(ref_path):
                             ref = '--reference %s' % ref_path
                     path = path.split(' ')[1]
-                    command('git -c protocol.file.allow=always submodule --quiet update %s %s' % (ref, path))
+                    command('git -c protocol.file.allow=always submodule --quiet update %s %s' % (ref, path), ssh_key)
 
         os.chdir(cwd)
 
@@ -1169,6 +1172,7 @@ def main():
     parser.add_argument('--ccache', help='use ccache', action='store_true')
     parser.add_argument('--verbose', help='be verbose', action='store_true')
     parser.add_argument('--config', help='specify config file path (defaults to ~/.config/cdist)')
+    parser.add_argument('--key', help='SSH private key file to use for git clone')
 
     subparsers = parser.add_subparsers(help='command to run', dest='command')
     parser_build = subparsers.add_parser("build", help="build project")
