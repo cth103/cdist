@@ -108,7 +108,7 @@ class BoolOption:
             self.value = value in ['yes', '1', 'true']
 
 class Config:
-    def __init__(self):
+    def __init__(self, filename):
         self.options = [ Option('mxe_prefix'),
                          Option('git_prefix'),
                          Option('git_reference'),
@@ -131,10 +131,14 @@ class Config:
                          Option('temp', '/var/tmp'),
                          Option('osx_notarytool', ['xcrun', 'notarytool'])]
 
-        config_dir = '%s/.config' % os.path.expanduser('~')
-        if not os.path.exists(config_dir):
-            os.mkdir(config_dir)
-        config_file = '%s/cdist' % config_dir
+        if filename:
+            config_file = filename
+        else:
+            config_dir = '%s/.config' % os.path.expanduser('~')
+            if not os.path.exists(config_dir):
+                os.mkdir(config_dir)
+            config_file = '%s/cdist' % config_dir
+
         if not os.path.exists(config_file):
             f = open(config_file, 'w')
             for o in self.options:
@@ -143,7 +147,7 @@ class Config:
             print('Template config file written to %s; please edit and try again.' % config_file, file=sys.stderr)
             sys.exit(1)
 
-        f = open('%s/.config/cdist' % os.path.expanduser('~'), 'r')
+        f = open(config_file, 'r')
         while True:
             l = f.readline()
             if l == '':
@@ -184,7 +188,6 @@ class Config:
         else:
             return 'docker'
 
-config = Config()
 
 #
 # Utility bits
@@ -1165,6 +1168,7 @@ def main():
     parser.add_argument('--option', help='set an option for the build (use --option key:value)', action='append')
     parser.add_argument('--ccache', help='use ccache', action='store_true')
     parser.add_argument('--verbose', help='be verbose', action='store_true')
+    parser.add_argument('--config', help='specify config file path (defaults to ~/.config/cdist)')
 
     subparsers = parser.add_subparsers(help='command to run', dest='command')
     parser_build = subparsers.add_parser("build", help="build project")
@@ -1192,6 +1196,9 @@ def main():
 
     global args
     args = parser.parse_args()
+
+    global config
+    config = Config(args.config)
 
     # Check for incorrect multiple parameters
     if args.target is not None:
