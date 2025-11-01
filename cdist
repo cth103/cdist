@@ -902,7 +902,7 @@ class LocalTarget(Target):
         self.distro = None
         self.detail = None
         self.version = None
-        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory))
+        self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib64/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory, self.directory))
         self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
         self.set('CXXFLAGS', '-I%s/include' % self.directory)
         self.set('LINKFLAGS', '-L%s/lib' % self.directory)
