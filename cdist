@@ -971,7 +971,6 @@ def target_factory(args):
         target = LinuxLocalTarget(
                     directory=args.work,
                     dependencies_only=args.dependencies_only,
-                    platform="linux",
                     distro=args.local_distro,
                     version=args.local_version,
                     cpu=args.local_cpu,
