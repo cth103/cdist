@@ -897,12 +897,6 @@ class LocalTarget(Target):
     """Build on the local machine with its environment"""
     def __init__(self, *a, **k):
         super(LocalTarget, self).__init__(*a, **k)
-        # Hack around ffmpeg.git which sees that the target isn't windows/osx and then assumes
-        # distro will be there.
-        self.distro = None
-        self.detail = None
-        self.version = None
-        self.bits = 64
         self.set('PKG_CONFIG_PATH', '%s/lib/pkgconfig:%s/lib64/pkgconfig:%s/bin/pkgconfig' % (self.directory, self.directory, self.directory))
         self.append_with_colon('LD_LIBRARY_PATH', '%s/lib' % self.directory)
         self.set('CXXFLAGS', '-I%s/include' % self.directory)
@@ -974,7 +968,14 @@ def target_factory(args):
     elif s == 'appimage-old':
         target = AppImageTarget(args.work, ubuntu_version='14.04')
     elif s == 'local':
-        target = LocalTarget(directory=args.work, dependencies_only=args.dependencies_only, platform="linux")
+        target = LinuxLocalTarget(
+                    directory=args.work,
+                    dependencies_only=args.dependencies_only,
+                    platform="linux",
+                    distro=args.local_distro,
+                    version=args.local_version,
+                    cpu=args.local_cpu,
+                 )
 
     if target is None:
         raise Error("Bad target `%s'" % s)
@@ -1161,6 +1162,9 @@ def main():
     parser.add_argument('-o', '--output', help='output directory', default='.')
     parser.add_argument('-q', '--quiet', help='be quiet', action='store_true')
     parser.add_argument('-t', '--target', help='target', action='append')
+    parser.add_argument('--local-distro', help='distro to announce for -t local', default='ubuntu')
+    parser.add_argument('--local-version', help='distro to announce for -t local', default='24.04')
+    parser.add_argument('--local-cpu', help='CPU to announce for -t local', default='x86')
     parser.add_argument('--environment-version', help='version of environment to use')
     parser.add_argument('-k', '--keep', help='keep working tree', action='store_true')
     parser.add_argument('--keep-on-error', help='keep working tree if there is an error', action='store_true')
