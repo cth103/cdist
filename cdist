@@ -715,7 +715,7 @@ class FlatpakTarget(Target):
 
     def setup(self):
         super().setup()
-        globals.trees.get(self.project, self.checkout, self).checkout_dependencies()
+        globals.trees.get(self.project, self.checkout, self).checkout_dependencies(for_package=True)
 
     def flatpak(self):
         return 'flatpak'
@@ -1070,9 +1070,9 @@ class Tree:
         head_tag = command_and_read(f'git -C {self._project} tag -l --points-at HEAD')
         return head_tag[0][1:] if head_tag else command_and_read(f'git -C {self._project} rev-parse --short HEAD')[0]
 
-    def call(self, function, *args):
+    def call(self, function, *args, **kwargs):
         with TreeDirectory(self):
-            return self.cscript[function](self.target, *args)
+            return self.cscript[function](self.target, *args, **kwargs)
 
     def add_defaults(self, options):
         """Add the defaults from self into a dict options and returns a new dict"""
@@ -1089,7 +1089,7 @@ class Tree:
                     new_options[k] = v
         return new_options
 
-    def dependencies(self, options):
+    def dependencies(self, options, for_package):
         """
         yield details of the dependencies of this tree.  Each dependency is returned
         as a tuple of (tree, options).
@@ -1098,11 +1098,16 @@ class Tree:
         if not 'dependencies' in self.cscript:
             return
 
-        if len(inspect.getfullargspec(self.cscript['dependencies']).args) == 2:
-            deps = self.call('dependencies', self.add_defaults(options))
-        else:
+        dependencies_args = inspect.getfullargspec(self.cscript['dependencies']).args
+
+        if len(dependencies_args) == 1:
             log_normal("Deprecated cscript dependencies() method with no options parameter")
             deps = self.call('dependencies')
+        else:
+            kw = {}
+            if 'for_package' in dependencies_args:
+                kw['for_package'] = for_package
+            deps = self.call('dependencies', self.add_defaults(options), **kw)
 
         # Loop over our immediate dependencies
         for d in deps:
@@ -1110,12 +1115,12 @@ class Tree:
 
             # deps only get their options from the parent's cscript
             dep_options = d[2] if len(d) > 2 else {}
-            for i in dep.dependencies(dep_options):
+            for i in dep.dependencies(dep_options, for_package):
                 yield i
             yield (dep, dep_options)
 
-    def checkout_dependencies(self, options={}):
-        for i in self.dependencies(options):
+    def checkout_dependencies(self, options, for_package):
+        for i in self.dependencies(options, for_package):
             pass
 
     def build_dependencies(self, options, for_package):
@@ -1123,7 +1128,7 @@ class Tree:
         Called on the 'main' project tree (-p on the command line) to build all dependencies.
         options: either from command line (for top-level tree) or from parent's dependencies() (for other trees)
         """
-        for dependency, dependency_options in self.dependencies(options):
+        for dependency, dependency_options in self.dependencies(options, for_package):
             dependency.build(dependency_options, for_package)
 
     def build(self, options, for_package):
@@ -1297,7 +1302,7 @@ def main():
     elif args.command == 'manual':
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
-        tree.checkout_dependencies()
+        tree.checkout_dependencies(for_package=False)
 
         outs = tree.call('make_manual')
         for o in outs:
