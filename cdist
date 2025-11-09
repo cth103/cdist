@@ -573,7 +573,7 @@ class WindowsDockerTarget(DockerTarget):
         self.set('RANLIB', '%s-ranlib' % self.name)
         self.set('WINRC', '%s-windres' % self.name)
         cxx = '-I%s/include -I%s/include' % (self.environment_prefix, self.directory)
-        link = '-L%s/lib -L%s/lib' % (self.environment_prefix, self.directory)
+        link = '-L%s/lib -L%s/lib -L%s/lib64' % (self.environment_prefix, self.directory, self.directory)
         self.set('CXXFLAGS', '"%s"' % cxx)
         self.set('CPPFLAGS', '')
         self.set('LINKFLAGS', '"%s"' % link)
