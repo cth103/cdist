@@ -852,7 +852,7 @@ class OSXUniversalTarget(OSXTarget):
     def package(self, project, checkout, output_dir, options, notarize):
         for target in self.sub_targets:
             tree = globals.trees.get(project, checkout, target)
-            tree.build_dependencies(options)
+            tree.build_dependencies(options, for_package=True)
             tree.build(options, for_package=True)
 
         super().package(project, checkout, output_dir, options, notarize)
