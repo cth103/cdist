@@ -494,8 +494,9 @@ class Target:
 
 
 class DockerTarget(Target):
-    def __init__(self, *a, **k):
+    def __init__(self, environment_version=None, *a, **k):
         super().__init__(*a, **k)
+        self._environment_version = environment_version
         self.mounts = []
         self.privileged = False
 
@@ -523,6 +524,8 @@ class DockerTarget(Target):
         tag = self.image
         if config.has('docker_hub_repository'):
             tag = '%s:%s' % (config.get('docker_hub_repository'), tag)
+        if self._environment_version:
+            tag += "_%s" % self._environment_version
 
         def signal_handler(signum, frame):
             raise Error('Killed')
@@ -552,8 +555,8 @@ class WindowsDockerTarget(DockerTarget):
     environment_prefix: path to Windows environment for the appropriate target (libraries and some tools)
     tool_path: path to 32- and 64-bit tools
     """
-    def __init__(self, bits, directory, environment_version):
-        super().__init__(directory=directory, platform='windows')
+    def __init__(self, bits, *a, **k):
+        super().__init__(platform='windows', *a, **k)
         self.bits = bits
         # This was used to differentiate "normal" Windows from XP, and is no longer important,
         # but old cscripts still look for it
@@ -580,8 +583,6 @@ class WindowsDockerTarget(DockerTarget):
         self.set('LDFLAGS', '"%s"' % link)
 
         self.image = 'windows'
-        if environment_version is not None:
-            self.image += '_%s' % environment_version
 
     def setup(self):
         super().setup()
@@ -943,9 +944,9 @@ def target_factory(args):
         if len(p) != 3:
             raise Error("Bad Linux target name `%s'; must be something like ubuntu-16.04-32 (i.e. distro-version-bits), fedora-41-arm or debian-64-x86 (distro-version-cpu)" % s)
         if p[2] == "64" or p[2] == "x86":
-            target = LinuxDockerTarget(distro=p[0], version=p[1], cpu="x86", directory=args.work)
+            target = LinuxDockerTarget(distro=p[0], version=p[1], cpu="x86", directory=args.work, environment_version=args.environment_version)
         elif p[2] == "arm":
-            target = LinuxLocalTarget(distro=p[0], version=p[1], cpu="arm", directory=args.work)
+            target = LinuxLocalTarget(distro=p[0], version=p[1], cpu="arm", directory=args.work, environment_version=args.environment_version)
     elif s.startswith('arch-'):
         p = s.split('-')
         if len(p) != 2:
