@@ -1303,7 +1303,7 @@ def main():
     elif args.command == 'manual':
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
-        tree.checkout_dependencies(for_package=False)
+        tree.checkout_dependencies(get_command_line_options(args), for_package=False)
 
         outs = tree.call('make_manual')
         for o in outs:
