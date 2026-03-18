@@ -958,6 +958,8 @@ def target_factory(args):
         target = OSXUniversalTarget(args.work, environment_version=args.environment_version)
     elif s == 'osx-intel':
         target = OSXSingleTarget('x86_64', config.get('osx_sdk'), config.get('osx_intel_deployment'), args.work, environment_version=args.environment_version)
+    elif s == 'osx-arm':
+        target = OSXSingleTarget('arm64', config.get('osx_sdk'), config.get('osx_arm_deployment'), args.work, environment_version=args.environment_version)
     elif s == 'osx-old':
         target = OSXSingleTarget('x86_64', config.get('osx_sdk'), config.get('osx_old_deployment'), args.work, False, environment_version=args.environment_version)
     elif s == 'source':
