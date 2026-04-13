@@ -943,10 +943,8 @@ def target_factory(args):
         p = s.split('-')
         if len(p) != 3:
             raise Error("Bad Linux target name `%s'; must be something like ubuntu-16.04-32 (i.e. distro-version-bits), fedora-41-arm or debian-64-x86 (distro-version-cpu)" % s)
-        if p[2] == "64" or p[2] == "x86":
-            target = LinuxDockerTarget(distro=p[0], version=p[1], cpu="x86", directory=args.work, environment_version=args.environment_version)
-        elif p[2] == "arm":
-            target = LinuxLocalTarget(distro=p[0], version=p[1], cpu="arm", directory=args.work, environment_version=args.environment_version)
+        cpu = 'x86' if p[2] == "64" or p[2] == "x86" else 'arm'
+        target = LinuxDockerTarget(distro=p[0], version=p[1], cpu=cpu, directory=args.work, environment_version=args.environment_version)
     elif s.startswith('arch-'):
         p = s.split('-')
         if len(p) != 2:
