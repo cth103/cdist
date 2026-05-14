@@ -971,7 +971,7 @@ def target_factory(args):
     elif s == 'local':
         target = LinuxLocalTarget(
                     directory=args.work,
-                    dependencies_only=args.dependencies_only,
+                    dependencies_only=getattr(args, 'dependencies_only', False),
                     distro=args.local_distro,
                     version=args.local_version,
                     cpu=args.local_cpu,
