@@ -397,12 +397,7 @@ class Target:
         anything not in a list will be put into one.
         options: from command line
         """
-        if len(inspect.getfullargspec(tree.cscript['package']).args) == 3:
-            packages = tree.call('package', tree.version, tree.add_defaults(options))
-        else:
-            log_normal("Deprecated cscript package() method with no options parameter")
-            packages = tree.call('package', tree.version)
-
+        packages = tree.vaguely_call('package', version=tree.version, options=tree.add_defaults(options))
         return packages if isinstance(packages, list) else [packages]
 
     def _copy_packages(self, tree, packages, output_dir):
@@ -430,11 +425,7 @@ class Target:
         tree = globals.trees.get(project, checkout, target)
 
         with TreeDirectory(tree):
-            if len(inspect.getfullargspec(tree.cscript['test']).args) == 3:
-                return tree.call('test', tree.add_defaults(options), test)
-            else:
-                log_normal('Deprecated cscript test() method with no options parameter')
-                return tree.call('test', test)
+            return tree.vaguely_call('test', options=tree.add_defaults(options), test=test)
 
     def set(self, a, b):
         self.variables[a] = b
@@ -1090,6 +1081,14 @@ class Tree:
         with TreeDirectory(self):
             return self.cscript[function](self.target, *args, **kwargs)
 
+    def vaguely_call(self, function, **kwargs):
+        values = []
+        for arg in inspect.getfullargspec(self.cscript[function]).args:
+            if arg not in kwargs:
+                raise Error('Requested argument %s not provided' % arg)
+            values.append(kwargs[arg])
+        return self.call(function, values)
+
     def add_defaults(self, options):
         """Add the defaults from self into a dict options and returns a new dict"""
         new_options = copy.copy(options)
@@ -1114,18 +1113,7 @@ class Tree:
         if not 'dependencies' in self.cscript:
             return
 
-        dependencies_args = inspect.getfullargspec(self.cscript['dependencies']).args
-
-        if len(dependencies_args) == 1:
-            log_normal("Deprecated cscript dependencies() method with no options parameter")
-            deps = self.call('dependencies')
-        else:
-            kw = {}
-            if 'for_package' in dependencies_args:
-                kw['for_package'] = purpose == 'package'
-            elif 'purpose' in dependencies_args:
-                kw['purpose'] = purpose
-            deps = self.call('dependencies', self.add_defaults(options), **kw)
+        deps = vaguely_call('dependencies', options=self.add_defaults(options), for_package=purpose=='package', purpose=purpose)
 
         # Loop over our immediate dependencies
         for d in deps:
@@ -1161,18 +1149,7 @@ class Tree:
         variables = copy.copy(self.target.variables)
 
         if not globals.dry_run:
-            args = inspect.getfullargspec(self.cscript['build']).args
-            arg_values = []
-            for arg in args:
-                if arg == 'options':
-                    arg_values.append(self.add_defaults(options))
-                elif arg == 'purpose':
-                    arg_values.append(purpose)
-                elif arg == 'version':
-                    arg_values.append(self.version)
-                elif arg == 'for_package':
-                    arg_values.append(purpose == 'package')
-            self.call('build', *arg_values)
+            self.vaguely_call('build', options=self.add_defaults(options), purpose=purpose, version=self.version, for_package=purpose=='package')
 
         self.target.variables = variables
         self.built = True
