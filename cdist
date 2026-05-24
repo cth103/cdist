@@ -1113,7 +1113,7 @@ class Tree:
         if not 'dependencies' in self.cscript:
             return
 
-        deps = vaguely_call('dependencies', options=self.add_defaults(options), for_package=purpose=='package', purpose=purpose)
+        deps = self.vaguely_call('dependencies', options=self.add_defaults(options), for_package=purpose=='package', purpose=purpose)
 
         # Loop over our immediate dependencies
         for d in deps:
