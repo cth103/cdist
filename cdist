@@ -1081,13 +1081,21 @@ class Tree:
         with TreeDirectory(self):
             return self.cscript[function](self.target, *args, **kwargs)
 
-    def vaguely_call(self, function, **kwargs):
-        values = []
+    def vaguely_call(self, function, **potential_args):
+        args = []
+        kwargs = {}
         for arg in inspect.getfullargspec(self.cscript[function]).args:
-            if arg not in kwargs:
-                raise Error('Requested argument %s not provided' % arg)
-            values.append(kwargs[arg])
-        return self.call(function, values)
+            if arg == 'target':
+                # This gets added in call()
+                continue
+            if arg not in potential_args:
+                raise Error('Requested argument %s for %s not provided' % (arg, function))
+            args.append(potential_args[arg])
+        for arg in inspect.getfullargspec(self.cscript[function]).kwonlyargs:
+            if arg not in potential_args:
+                raise Error('Requested argument %s for %s not provided' % (arg, function))
+            kwargs[arg] = potential_args[arg]
+        return self.call(function, *args, **kwargs)
 
     def add_defaults(self, options):
         """Add the defaults from self into a dict options and returns a new dict"""
