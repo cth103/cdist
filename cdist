@@ -413,16 +413,16 @@ class Target:
         """
         options: from command line
         """
-        tree = self.build(project, checkout, options, for_package=True)
+        tree = self.build(project, checkout, options, purpose='package')
         p = self._cscript_package(tree, options)
         self._copy_packages(tree, p, output_dir)
 
-    def build(self, project, checkout, options, for_package=False):
+    def build(self, project, checkout, options, purpose):
         tree = globals.trees.get(project, checkout, self)
         if self.build_dependencies:
-            tree.build_dependencies(options, for_package)
+            tree.build_dependencies(options, purpose=purpose)
         if not self.dependencies_only:
-            tree.build(options, for_package=for_package)
+            tree.build(options, purpose=purpose)
         return tree
 
     def test(self, project, checkout, target, test, options):
@@ -716,7 +716,7 @@ class FlatpakTarget(Target):
 
     def setup(self):
         super().setup()
-        globals.trees.get(self.project, self.checkout, self).checkout_dependencies(for_package=True)
+        globals.trees.get(self.project, self.checkout, self).checkout_dependencies(purpose='package')
 
     def flatpak(self):
         return 'flatpak'
@@ -835,7 +835,7 @@ class OSXSingleTarget(OSXTarget):
             self.set('CXX', '"ccache g++"')
 
     def package(self, project, checkout, output_dir, options, notarize):
-        tree = self.build(project, checkout, options, for_package=True)
+        tree = self.build(project, checkout, options, purpose='package')
         super().package(project, checkout, output_dir, options, notarize)
 
 
@@ -853,8 +853,8 @@ class OSXUniversalTarget(OSXTarget):
     def package(self, project, checkout, output_dir, options, notarize):
         for target in self.sub_targets:
             tree = globals.trees.get(project, checkout, target)
-            tree.build_dependencies(options, for_package=True)
-            tree.build(options, for_package=True)
+            tree.build_dependencies(options, purpose='package')
+            tree.build(options, purpose='package')
 
         super().package(project, checkout, output_dir, options, notarize)
 
@@ -1105,7 +1105,7 @@ class Tree:
                     new_options[k] = v
         return new_options
 
-    def dependencies(self, options, for_package):
+    def dependencies(self, options, purpose):
         """
         yield details of the dependencies of this tree.  Each dependency is returned
         as a tuple of (tree, options).
@@ -1122,7 +1122,9 @@ class Tree:
         else:
             kw = {}
             if 'for_package' in dependencies_args:
-                kw['for_package'] = for_package
+                kw['for_package'] = purpose == 'package'
+            elif 'purpose' in dependencies_args:
+                kw['purpose'] = purpose
             deps = self.call('dependencies', self.add_defaults(options), **kw)
 
         # Loop over our immediate dependencies
@@ -1131,23 +1133,23 @@ class Tree:
 
             # deps only get their options from the parent's cscript
             dep_options = d[2] if len(d) > 2 else {}
-            for i in dep.dependencies(dep_options, for_package):
+            for i in dep.dependencies(dep_options, purpose):
                 yield i
             yield (dep, dep_options)
 
-    def checkout_dependencies(self, options, for_package):
-        for i in self.dependencies(options, for_package):
+    def checkout_dependencies(self, options, purpose):
+        for i in self.dependencies(options, purpose):
             pass
 
-    def build_dependencies(self, options, for_package):
+    def build_dependencies(self, options, purpose):
         """
         Called on the 'main' project tree (-p on the command line) to build all dependencies.
         options: either from command line (for top-level tree) or from parent's dependencies() (for other trees)
         """
-        for dependency, dependency_options in self.dependencies(options, for_package):
-            dependency.build(dependency_options, for_package)
+        for dependency, dependency_options in self.dependencies(options, purpose):
+            dependency.build(dependency_options, purpose=purpose)
 
-    def build(self, options, for_package):
+    def build(self, options, purpose):
         """
         options: either from command line (for top-level tree) or from parent's dependencies() (for other trees)
         """
@@ -1159,15 +1161,18 @@ class Tree:
         variables = copy.copy(self.target.variables)
 
         if not globals.dry_run:
-            num_args = len(inspect.getfullargspec(self.cscript['build']).args)
-            if num_args == 4:
-                self.call('build', self.add_defaults(options), for_package, self.version)
-            elif num_args == 3:
-                self.call('build', self.add_defaults(options), for_package)
-            elif num_args == 2:
-                self.call('build', self.add_defaults(options))
-            else:
-                self.call('build')
+            args = inspect.getfullargspec(self.cscript['build']).args
+            arg_values = []
+            for arg in args:
+                if arg == 'options':
+                    arg_values.append(self.add_defaults(options))
+                elif arg == 'purpose':
+                    arg_values.append(purpose)
+                elif arg == 'version':
+                    arg_values.append(self.version)
+                elif arg == 'for_package':
+                    arg_values.append(purpose == 'package')
+            self.call('build', *arg_values)
 
         self.target.variables = variables
         self.built = True
@@ -1271,7 +1276,7 @@ def main():
 
         target = target_factory(args)
         try:
-            target.build(args.project, args.checkout, get_command_line_options(args))
+            target.build(args.project, args.checkout, get_command_line_options(args), purpose='build')
         except Exception as e:
             error = True
             raise e
@@ -1318,7 +1323,7 @@ def main():
     elif args.command == 'manual':
         target = SourceTarget()
         tree = globals.trees.get(args.project, args.checkout, target)
-        tree.checkout_dependencies(get_command_line_options(args), for_package=False)
+        tree.checkout_dependencies(get_command_line_options(args), purpose='manual')
 
         outs = tree.call('make_manual')
         for o in outs:
@@ -1380,7 +1385,7 @@ def main():
             if args.no_implicit_build:
                 globals.trees.add_built(args.project, args.checkout, target)
             else:
-                target.build(args.project, args.checkout, options)
+                target.build(args.project, args.checkout, options, purpose='test')
             target.test(args.project, args.checkout, target, args.test, options)
         except Exception as e:
             error = True
