@@ -799,7 +799,7 @@ class OSXTarget(Target):
 
 
 class OSXSingleTarget(OSXTarget):
-    def __init__(self, arch, sdk, deployment, directory=None, can_notarize=True, environment_version=None):
+    def __init__(self, arch, sdk, deployment, directory=None, can_notarize=True, environment_version=None, **k):
         super(OSXSingleTarget, self).__init__(directory=directory, environment_version=environment_version)
         self.arch = arch
         self.sdk = sdk
@@ -916,6 +916,11 @@ class LinuxLocalTarget(LinuxTarget, LocalTarget):
         super().__init__(*a, **k)
 
 
+class OSXLocalTarget(OSXSingleTarget, LocalTarget):
+    def __init__(self, *a, **k):
+        super().__init__(sdk=config.get('osx_sdk'), deployment=config.get('osx_arm_deployment'), *a, **k)
+
+
 # @param s Target string:
 #       windows-{32,64}
 #    or ubuntu-version-{32,64}
@@ -969,13 +974,23 @@ def target_factory(args):
     elif s == 'appimage-old':
         target = AppImageTarget(args.work, ubuntu_version='14.04')
     elif s == 'local':
-        target = LinuxLocalTarget(
-                    directory=args.work,
-                    dependencies_only=getattr(args, 'dependencies_only', False),
-                    distro=args.local_distro,
-                    version=args.local_version,
-                    cpu=args.local_cpu,
-                 )
+        if platform.system() == 'Darwin':
+            target = OSXLocalTarget(
+                        directory=args.work,
+                        arch=platform.machine(),
+                        dependencies_only=getattr(args, 'dependencies_only', False),
+                        distro=args.local_distro,
+                        version=args.local_version,
+                        cpu=args.local_cpu,
+                     )
+        else:
+            target = LinuxLocalTarget(
+                        directory=args.work,
+                        dependencies_only=getattr(args, 'dependencies_only', False),
+                        distro=args.local_distro,
+                        version=args.local_version,
+                        cpu=args.local_cpu
+                    )
 
     if target is None:
         raise Error("Bad target `%s'" % s)
