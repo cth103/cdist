@@ -677,9 +677,9 @@ class LinuxDockerTarget(DockerTarget, LinuxTarget):
     def __init__(self, *a, **k):
         super().__init__(*a, **k)
         if self.version is None:
-            self.image = '%s-64' % self.distro
+            self.image = '%s' % self.distro
         else:
-            self.image = '%s-%s-64' % (self.distro, self.version)
+            self.image = '%s-%s' % (self.distro, self.version)
 
 
 class AppImageTarget(LinuxDockerTarget):
@@ -938,14 +938,11 @@ def target_factory(args):
     elif any([s.startswith(prefix) for prefix in ('ubuntu-', 'debian-', 'centos-', 'fedora-', 'mageia-', 'rocky-')]):
         p = s.split('-')
         if len(p) != 3:
-            raise Error("Bad Linux target name `%s'; must be something like ubuntu-16.04-32 (i.e. distro-version-bits), fedora-41-arm or debian-64-x86 (distro-version-cpu)" % s)
+            raise Error("Bad Linux target name `%s'; must be something like fedora-41-arm or debian-13-x86 (distro-version-cpu)" % s)
         cpu = 'x86' if p[2] == "64" or p[2] == "x86" else 'arm'
         target = LinuxDockerTarget(distro=p[0], version=p[1], cpu=cpu, directory=args.work, environment_version=args.environment_version)
-    elif s.startswith('arch-'):
-        p = s.split('-')
-        if len(p) != 2:
-            raise Error("Bad Arch target name `%s'; must be arch-32 or arch-64")
-        target = LinuxDockerTarget(distro=p[0], version=None, cpu="x86", directory=args.work)
+    elif s == 'arch':
+        target = LinuxDockerTarget(distro=s, version=None, cpu="x86", directory=args.work)
     elif s == 'raspbian':
         target = LinuxDockerTarget(distro=s, version=None, cpu="arm", directory=args.work)
     elif s == 'osx':
