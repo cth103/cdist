@@ -683,8 +683,8 @@ class LinuxDockerTarget(DockerTarget, LinuxTarget):
 
 
 class AppImageTarget(LinuxDockerTarget):
-    def __init__(self, work, ubuntu_version):
-        super(AppImageTarget, self).__init__(distro='ubuntu', version=ubuntu_version, cpu='x86', directory=work)
+    def __init__(self, work, ubuntu_version, *a, **k):
+        super(AppImageTarget, self).__init__(*a, distro='ubuntu', version=ubuntu_version, cpu='x86', directory=work, **k)
         self.detail = 'appimage'
         self.privileged = True
 
@@ -958,7 +958,7 @@ def target_factory(args):
     elif s == 'flatpak':
         target = FlatpakTarget(args.project, args.checkout, args.work)
     elif s == 'appimage':
-        target = AppImageTarget(args.work, ubuntu_version='18.04')
+        target = AppImageTarget(args.work, ubuntu_version='18.04', environment_version=args.environment_version)
     elif s == 'appimage-old':
         target = AppImageTarget(args.work, ubuntu_version='14.04')
     elif s == 'local':
