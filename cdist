@@ -498,7 +498,10 @@ class DockerTarget(Target):
 
     def _mount_option(self, d):
         parts = d.split(':')
-        return '-v %s:%s ' % (os.path.realpath(parts[0]), os.path.realpath(parts[-1]))
+        to = os.path.realpath(parts[-1])
+        if not os.path.exists(os.path.dirname(to)):
+            os.mkdir(os.path.dirname(to))
+        return '-v %s:%s ' % (os.path.realpath(parts[0]), to)
 
     def setup(self):
         super().setup()
