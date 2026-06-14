@@ -497,7 +497,8 @@ class DockerTarget(Target):
         return '-u %s' % getpass.getuser()
 
     def _mount_option(self, d):
-        return '-v %s:%s ' % (os.path.realpath(d), os.path.realpath(d))
+        parts = d.split(':')
+        return '-v %s:%s ' % (os.path.realpath(parts[0]), os.path.realpath(parts[-1]))
 
     def setup(self):
         super().setup()
@@ -1182,7 +1183,7 @@ def main():
     parser.add_argument('-g', '--git-prefix', help='override configured git prefix')
     parser.add_argument('-n', '--dry-run', help='run the process without building anything', action='store_true')
     parser.add_argument('-e', '--environment', help='pass the value of the named environment variable into the build', action='append')
-    parser.add_argument('-m', '--mount', help='mount a given directory in the build environment', action='append')
+    parser.add_argument('-m', '--mount', help='mount a given directory in the build environment (pass either directory or source:target)', action='append')
     parser.add_argument('--option', help='set an option for the build (use --option key:value)', action='append')
     parser.add_argument('--ccache', help='use ccache', action='store_true')
     parser.add_argument('--verbose', help='be verbose', action='store_true')
