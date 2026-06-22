@@ -491,6 +491,7 @@ class DockerTarget(Target):
         self.mounts = []
         self.privileged = False
 
+    @property
     def _user_tag(self):
         if config.get('docker_no_user'):
             return ''
@@ -526,12 +527,12 @@ class DockerTarget(Target):
             raise Error('Killed')
         signal.signal(signal.SIGTERM, signal_handler)
 
-        self.container = command_and_read('%s run %s %s -itd %s /bin/bash' % (config.docker(), self._user_tag(), opts, tag))[0].strip()
+        self.container = command_and_read('%s run %s %s -itd %s /bin/bash' % (config.docker(), self._user_tag, opts, tag))[0].strip()
 
     def command(self, cmd):
         dir = os.path.join(self.directory, os.path.relpath(os.getcwd(), self.directory))
         interactive_flag = '-i ' if sys.stdin.isatty() else ''
-        command('%s exec %s %s -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), self._user_tag(), interactive_flag, self.container, self.variables_string(), dir, cmd))
+        command('%s exec %s %s -t %s /bin/bash -c \'export %s; cd %s; %s\'' % (config.docker(), self._user_tag, interactive_flag, self.container, self.variables_string(), dir, cmd))
 
     def cleanup(self):
         super(DockerTarget, self).cleanup()
