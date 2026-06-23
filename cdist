@@ -380,12 +380,10 @@ class Target:
                 if e.errno != 17:
                     raise e
             self.directory = tempfile.mkdtemp('', 'tmp', config.get('temp'))
-            self.rmdir = True
             self.set('CCACHE_BASEDIR', os.path.realpath(self.directory))
             self.set('CCACHE_NOHASHDIR', '')
         else:
             self.directory = os.path.realpath(directory)
-            self.rmdir = False
 
 
     def setup(self):
@@ -461,8 +459,7 @@ class Target:
         return e
 
     def cleanup(self):
-        if self.rmdir:
-            rmtree(self.directory)
+        rmtree(self.directory)
 
     def mount(self, m):
         pass
