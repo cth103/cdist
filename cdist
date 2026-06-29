@@ -1256,6 +1256,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = target_factory(args)
+        error = False
         try:
             target.build(args.project, args.checkout, get_command_line_options(args), purpose='build')
         except Exception as e:
@@ -1270,6 +1271,7 @@ def main():
             raise Error('you must specify -t or --target')
 
         target = None
+        error = False
         try:
             target = target_factory(args)
 
