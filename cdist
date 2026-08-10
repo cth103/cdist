@@ -45,6 +45,14 @@ class Error(Exception):
     def __repr__(self):
         return str(self)
 
+
+class Killed(Exception):
+    def __str__(self):
+        return 'Killed'
+    def __repr__(self):
+        return 'Killed'
+
+
 class Trees:
     """
     Store for Tree objects which re-uses already-created objects
@@ -273,6 +281,8 @@ def command(c, ssh_key=None):
         r = subprocess.run(c, shell=True)
         if r.returncode != 0:
             raise Error('command %s failed (%d)' % (c, r.returncode))
+    except Killed:
+        raise
     except Exception as e:
         raise Error('command %s failed (%s)' % (c, e))
 
@@ -521,7 +531,7 @@ class DockerTarget(Target):
             tag += "_%s" % self._environment_version
 
         def signal_handler(signum, frame):
-            raise Error('Killed')
+            raise Killed()
         signal.signal(signal.SIGTERM, signal_handler)
 
         self.container = command_and_read('%s run %s %s -itd %s /bin/bash' % (config.docker(), self._user_tag, opts, tag))[0].strip()
@@ -1190,6 +1200,7 @@ def main():
     parser.add_argument('--verbose', help='be verbose', action='store_true')
     parser.add_argument('--config', help='specify config file path (defaults to ~/.config/cdist)')
     parser.add_argument('--key', help='SSH private key file to use for git clone')
+    parser.add_argument('--pid', help='write pid as first line of stdout', action='store_true')
 
     subparsers = parser.add_subparsers(help='command to run', dest='command')
     parser_build = subparsers.add_parser("build", help="build project")
@@ -1214,6 +1225,10 @@ def main():
 
     global args
     args = parser.parse_args()
+
+    if args.pid:
+        print("PID:%d" % os.getpid())
+        print("PID:%d" % os.getpid(), file=sys.stderr)
 
     global config
     config = Config(args.config)
@@ -1286,6 +1301,8 @@ def main():
 
             makedirs(output_dir)
             target.package(args.project, args.checkout, output_dir, get_command_line_options(args), not args.no_notarize)
+        except Killed:
+            pass
         except Exception as e:
             error = True
             raise e
@@ -1370,6 +1387,8 @@ def main():
             else:
                 target.build(args.project, args.checkout, options, purpose='test')
             target.test(args.project, args.checkout, target, args.test, options)
+        except Killed:
+            pass
         except Exception as e:
             error = True
             raise e
