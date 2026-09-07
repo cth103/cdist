@@ -1,9 +1,9 @@
 #!/bin/bash
 
-images="ubuntu-14.04 ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 ubuntu-22.04 ubuntu-24.04 ubuntu-25.04 ubuntu-25.10 ubuntu-26.04"
+images="ubuntu-14.04 ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 ubuntu-22.04 ubuntu-24.04 ubuntu-25.04 ubuntu-25.10 ubuntu-26.04 ubuntu-26.10"
 images="$images windows windows_v2.18.x windows_v2.20.x"
-images="$images debian-10 debian-11 debian-12 debian-13 debian-unstable"
-images="$images fedora-39 fedora-40 fedora-41 fedora-42 fedora-43 fedora-44"
+images="$images debian-10 debian-12 debian-13 debian-unstable"
+images="$images fedora-43 fedora-44 fedora-45"
 images="$images mageia-8 mageia-9"
 images="$images centos-7 centos-stream8 centos-stream9 centos-stream10"
 images="$images arch rocky-8 rocky-9 rocky-10 test"
