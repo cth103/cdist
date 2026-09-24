@@ -836,6 +836,7 @@ class OSXSingleTarget(OSXTarget):
         Target.ccache.fset(self, v)
         if v:
             self.set('CC', '"ccache gcc"')
+            self.set('OBJC', '"ccache gcc"')
             self.set('CXX', '"ccache g++"')
 
     def package(self, project, checkout, output_dir, options, notarize):
