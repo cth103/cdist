@@ -811,10 +811,10 @@ class OSXSingleTarget(OSXTarget):
         self.sub_targets = [self]
 
         flags = '-isysroot %s/MacOSX%s.sdk -arch %s' % (self.sdk_prefix, sdk, arch)
-        if arch == 'x86_64':
-            host_enviro = '%s/x86_64/%s' % (self.environment_prefix, deployment)
-        else:
+        if deployment == '10.8':
             host_enviro = '%s/x86_64/10.10' % self.environment_prefix
+        else:
+            host_enviro = '%s/x86_64/%s' % (self.environment_prefix, deployment)
         target_enviro = '%s/%s/%s' % (self.environment_prefix, arch, deployment)
 
         self.bin = '%s/bin' % target_enviro
