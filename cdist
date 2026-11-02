@@ -665,6 +665,14 @@ class LinuxTarget(Target):
                  '%s/lib/pkgconfig:%s/lib64/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig' % (self.directory, self.directory))
         self.set('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
+    def set(self, k, v):
+        if k in ('PKG_CONFIG_PATH', 'PATH'):
+            self.append_with_colon(k, v)
+        elif k in ('CXXFLAGS', 'CPPFLAGS', 'LINKFLAGS'):
+            self.append_with_space(k, v)
+        else:
+            super().set(k, v)
+
     def setup(self):
         super().setup()
         if self.ccache:
